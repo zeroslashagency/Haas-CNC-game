@@ -77,8 +77,46 @@ const PRESETS = {
 // AES Key from libStormSecurity.so
 const AES_KEY = 'HA45_AU70M4TI0N*';
 
+// ---------------------------------------------------------------------------
+// Password lock — SHA-256 of the password is stored, never the plaintext.
+// ---------------------------------------------------------------------------
+const LOCK_HASH = 'c729b418c0d6e2d3e051993da7e43652de0fb1ffe83fcc1a2846b502e26b86f0';
+
+function initLock() {
+    const input = document.getElementById('lockPassword');
+    const btn = document.getElementById('lockBtn');
+    const err = document.getElementById('lockError');
+
+    if (sessionStorage.getItem('haas_unlocked') === '1') {
+        document.body.classList.remove('locked');
+        return;
+    }
+
+    function tryUnlock() {
+        const entered = CryptoJS.SHA256(input.value).toString();
+        if (entered === LOCK_HASH) {
+            sessionStorage.setItem('haas_unlocked', '1');
+            document.body.classList.remove('locked');
+        } else {
+            input.value = '';
+            input.focus();
+            err.style.display = 'block';
+            err.classList.remove('shake');
+            void err.offsetWidth; // restart animation
+            err.classList.add('shake');
+        }
+    }
+
+    btn.addEventListener('click', tryUnlock);
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') tryUnlock();
+    });
+    input.focus();
+}
+
 // Initialize UI
 document.addEventListener('DOMContentLoaded', function() {
+    initLock();
     initializeEventListeners();
     updateFeatureCount();
     handleKeyTypeChange();

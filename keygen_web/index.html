@@ -6,7 +6,18 @@
     <title>Haas CNC Key Generator</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="locked">
+    <!-- Password lock -->
+    <div id="lockOverlay" class="lock-overlay">
+        <div class="lock-card">
+            <div class="lock-title">Haas CNC Key Generator</div>
+            <p class="lock-desc">Enter password to continue</p>
+            <input type="password" id="lockPassword" placeholder="Password" autocomplete="off" autofocus>
+            <div id="lockError" class="lock-error" style="display:none;">Wrong password</div>
+            <button id="lockBtn" class="generate-btn" style="margin-top:12px;">Unlock</button>
+        </div>
+    </div>
+
     <div class="page">
         <header class="header">
             <div class="header-row">

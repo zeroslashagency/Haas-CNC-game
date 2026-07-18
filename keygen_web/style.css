@@ -25,6 +25,44 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
+/* ---------- password lock ---------- */
+body.locked .page, body.locked .footer { display: none; }
+body:not(.locked) #lockOverlay { display: none; }
+.lock-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+}
+.lock-card {
+    width: min(340px, calc(100vw - 40px));
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(0,0,0,.08);
+}
+.lock-title { font-size: 17px; font-weight: 700; }
+.lock-desc { font-size: 13px; color: var(--text-dim); margin: 6px 0 16px; }
+.lock-card input {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 16px; font-family: inherit;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    outline: none;
+    text-align: center;
+    transition: border-color .15s;
+}
+.lock-card input:focus { border-color: var(--border-strong); }
+.lock-error { color: #dc2626; font-size: 13px; margin-top: 10px; }
+.lock-error.shake { animation: shake .3s; }
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
 .page {
     max-width: 860px;
     margin: 0 auto;
