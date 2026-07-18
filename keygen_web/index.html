@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Haas CNC Key Generator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="page">
+        <header class="header">
+            <div class="header-row">
+                <h1>Haas CNC Key Generator</h1>
+                <span class="version">v3.0</span>
+            </div>
+            <p class="subtitle">Storm Security &middot; REL-100.17 / 100.18 / 100.23 &middot; verified NGC algorithm</p>
+        </header>
+
+        <!-- Key Type -->
+        <section class="section">
+            <h2 class="section-title">Key type</h2>
+            <div class="segmented">
+                <label class="segment">
+                    <input type="radio" name="keyType" value="individual" checked>
+                    <span class="segment-label">Individual codes</span>
+                    <span class="segment-desc">5-digit keypad codes</span>
+                </label>
+                <label class="segment">
+                    <input type="radio" name="keyType" value="file">
+                    <span class="segment-label">USB drive key</span>
+                    <span class="segment-desc">HaasKey.txt file</span>
+                </label>
+            </div>
+        </section>
+
+        <!-- Machine -->
+        <section class="section">
+            <h2 class="section-title">Machine</h2>
+            <div class="field-row">
+                <div class="field">
+                    <label for="serial">Serial number</label>
+                    <input type="text" id="serial" inputmode="numeric" placeholder="1190223" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="firmware">Firmware</label>
+                    <select id="firmware">
+                        <option value="17">REL-100.17</option>
+                        <option value="18">REL-100.18</option>
+                        <option value="23" selected>REL-100.23</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!-- Expiry (USB only) -->
+        <section class="section" id="expirySection" style="display:none;">
+            <h2 class="section-title">Expiration</h2>
+            <div class="chip-row">
+                <label class="chip"><input type="radio" name="expiry" value="unlimited" checked><span>Unlimited</span></label>
+                <label class="chip"><input type="radio" name="expiry" value="30"><span>30 days</span></label>
+                <label class="chip"><input type="radio" name="expiry" value="60"><span>60 days</span></label>
+                <label class="chip"><input type="radio" name="expiry" value="90"><span>90 days</span></label>
+                <label class="chip"><input type="radio" name="expiry" value="365"><span>1 year</span></label>
+                <label class="chip"><input type="radio" name="expiry" value="custom"><span>Custom</span></label>
+            </div>
+            <div id="customDateSection" class="field" style="display:none; margin-top:12px;">
+                <label for="customDate">Custom date</label>
+                <input type="date" id="customDate">
+            </div>
+        </section>
+
+        <!-- Features -->
+        <section class="section">
+            <div class="section-head">
+                <h2 class="section-title">Features</h2>
+                <span id="featureCount" class="feature-count">0 selected</span>
+            </div>
+
+            <div id="individualCodeSelection">
+                <p class="hint">Features marked <span class="code-badge">CODE</span> get a 5-digit keypad code. Others are USB-key only.</p>
+            </div>
+
+            <div id="filePresetButtons" class="chip-row" style="display:none;">
+                <button class="preset-btn" data-preset="basic">Basic</button>
+                <button class="preset-btn" data-preset="standard">Standard</button>
+                <button class="preset-btn" data-preset="advanced">Advanced</button>
+                <button class="preset-btn" data-preset="professional">Professional</button>
+                <button class="preset-btn active" data-preset="godmode">Godmode</button>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-group">
+                    <div class="group-head">
+                        <h3>Core</h3>
+                        <button class="group-toggle" data-group-toggle>All</button>
+                    </div>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature" data-feature="MACHINE"><span class="box"></span><span class="name">Machine Control</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MACROS" checked><span class="box"></span><span class="name">Macro Programming</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="ROTATION_AND_SCALING" checked><span class="box"></span><span class="name">Rotation &amp; Scaling</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="RIGID_TAPPING" checked><span class="box"></span><span class="name">Rigid Tapping</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="TCPC_AND_DWO" checked><span class="box"></span><span class="name">TCPC &amp; DWO</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="M19_SPINDLE_ORIENT" checked><span class="box"></span><span class="name">M19 Spindle Orient</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="UNLOCK_PARAMETERS"><span class="box"></span><span class="name">Unlock Parameters</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="UNLOCK_FACTORY_SETTINGS"><span class="box"></span><span class="name">Unlock Factory Settings</span><span class="code-badge">CODE</span></label>
+                </div>
+
+                <div class="feature-group">
+                    <div class="group-head">
+                        <h3>Machining</h3>
+                        <button class="group-toggle" data-group-toggle>All</button>
+                    </div>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="HIGH_SPEED_MACHINING" checked><span class="box"></span><span class="name">High-Speed Machining</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="VPS_EDITING" checked><span class="box"></span><span class="name">VPS Editing</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MEDIA_DISPLAY" checked><span class="box"></span><span class="name">Media Display</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature" data-feature="LOOK_AHEAD" checked><span class="box"></span><span class="name">Look-Ahead</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature" data-feature="ADVANCED_INTERPOLATION" checked><span class="box"></span><span class="name">Advanced Interpolation</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature" data-feature="MILL_TURN" checked><span class="box"></span><span class="name">Mill-Turn</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="CUSTOM_PLANE"><span class="box"></span><span class="name">Custom Plane</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="EXTENDED_FEATURES"><span class="box"></span><span class="name">Extended Features</span><span class="code-badge">CODE</span></label>
+                </div>
+
+                <div class="feature-group">
+                    <div class="group-head">
+                        <h3>Axis</h3>
+                        <button class="group-toggle" data-group-toggle>All</button>
+                    </div>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="FOURTH_AXIS" checked><span class="box"></span><span class="name">Fourth Axis (A/B)</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="FIFTH_AXIS" checked><span class="box"></span><span class="name">Fifth Axis</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="CUSTOM_ROTARIES" checked><span class="box"></span><span class="name">Custom Rotaries</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="C_AXIS_FEATURE"><span class="box"></span><span class="name">C Axis</span><span class="code-badge">CODE</span></label>
+                </div>
+
+                <div class="feature-group">
+                    <div class="group-head">
+                        <h3>Hardware</h3>
+                        <button class="group-toggle" data-group-toggle>All</button>
+                    </div>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MAX_MEMORY_1GB" checked><span class="box"></span><span class="name">Extended Memory (32/48/64 GB)</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="WIRELESS_NETWORKING" checked><span class="box"></span><span class="name">Wireless Networking</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="COMPENSATION_TABLES" checked><span class="box"></span><span class="name">Compensation Tables</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="THROUGH_SPINDLE_COOLANT" checked><span class="box"></span><span class="name">Through-Spindle Coolant</span><span class="code-badge">CODE</span></label>
+                </div>
+
+                <div class="feature-group">
+                    <div class="group-head">
+                        <h3>Spindle &amp; Probing</h3>
+                        <button class="group-toggle" data-group-toggle>All</button>
+                    </div>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MAX_SPINDLE_SPEED_10000" checked><span class="box"></span><span class="name">Max Spindle 10,000 RPM</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MAX_SPINDLE_SPEED_15000" checked><span class="box"></span><span class="name">Max Spindle 15,000 RPM</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MAX_SPINDLE_SPEED_ALL"><span class="box"></span><span class="name">Max Spindle (All Tiers)</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MAX_SUB_SPINDLE_SPEED"><span class="box"></span><span class="name">Max Sub-Spindle (All Tiers)</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MAX_LT_SPINDLE_SPEED"><span class="box"></span><span class="name">Max Live-Tooling Spindle (All Tiers)</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="ROBOT"><span class="box"></span><span class="name">Robot Interface</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature" data-feature="PROBING" checked><span class="box"></span><span class="name">Probing Cycles</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature" data-feature="WIRELESS_PROBING" checked><span class="box"></span><span class="name">Wireless Probing</span></label>
+                </div>
+            </div>
+        </section>
+
+        <!-- Advanced (USB only) -->
+        <section class="section" id="advancedSection" style="display:none;">
+            <h2 class="section-title">Advanced</h2>
+            <div class="field-row">
+                <div class="field">
+                    <label for="employeeId">Employee ID</label>
+                    <input type="text" id="employeeId" value="00000" maxlength="16">
+                </div>
+                <div class="field">
+                    <label for="companyCode">Company code</label>
+                    <input type="text" id="companyCode" value="HAAS" maxlength="16">
+                </div>
+                <div class="field">
+                    <label for="securityLevel">Security level</label>
+                    <select id="securityLevel">
+                        <option value="0x01">User</option>
+                        <option value="0x02">Operator</option>
+                        <option value="0x03">Supervisor</option>
+                        <option value="0x04">Administrator</option>
+                        <option value="0xFF" selected>Godmode</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!-- Notes: removing a feature -->
+        <section class="section">
+            <details class="notes">
+                <summary>
+                    <span class="section-title" style="margin:0;">Notes — how to remove a feature</span>
+                    <span class="notes-chevron">+</span>
+                </summary>
+                <div class="notes-body">
+                    <p>Entered codes are stored in the machine's magic-code file <code>&lt;serial&gt;_mc.xml</code> and in the BBU. On every boot the control re-seeds the codes from that file to the low level and re-validates them. If a feature's entry is gone, the control automatically flips it back to <em>Disabled</em> — so removing a feature = removing its entry, then rebooting.</p>
+
+                    <h3>Remove one feature (example: MACROS on machine 1190223)</h3>
+                    <ol>
+                        <li>Get file access to the control (USB service mode / SSH).</li>
+                        <li>Open the configuration folder and find <code>1190223_mc.xml</code>.</li>
+                        <li>Find the feature's block:
+                            <pre class="code-block">&lt;FEATUREID&gt;
+    &lt;NAME&gt;MACROS&lt;/NAME&gt;
+    &lt;CODE&gt;63571&lt;/CODE&gt;
+&lt;/FEATUREID&gt;</pre>
+                        </li>
+                        <li>Delete the whole <code>&lt;FEATUREID&gt;</code> block (or set its code to <code>&lt;CODE&gt;0&lt;/CODE&gt;</code>). Tier features carry a <code>VALUE</code> attribute, e.g. <code>&lt;CODE VALUE="15000"&gt;16884&lt;/CODE&gt;</code> — delete those the same way.</li>
+                        <li>Save the file and reboot the control.</li>
+                        <li>SETUP &rarr; FEATURES now shows the feature as not purchased again.</li>
+                    </ol>
+
+                    <h3>Good to know</h3>
+                    <ul>
+                        <li>Typing <code>0</code> on the keypad does <strong>not</strong> remove a purchase — it only toggles enable/disable.</li>
+                        <li>Individual codes are permanent: no expiry exists in the code format. The only built-in time limit is the 200-hour tryout.</li>
+                        <li>Re-entering an existing code pops up a duplicate-code warning (3 attempts, then locked for the session).</li>
+                        <li>Remove <em>all</em> features at once: delete or clear the whole <code>&lt;serial&gt;_mc.xml</code> file, then reboot.</li>
+                    </ul>
+                </div>
+            </details>
+        </section>
+
+        <!-- Generate -->
+        <div class="generate-bar">
+            <button id="generateBtn" class="generate-btn">Generate</button>
+        </div>
+
+        <!-- Individual codes output -->
+        <section class="section output-section" id="individualOutputSection" style="display:none;">
+            <div class="section-head">
+                <h2 class="section-title">Unlock codes</h2>
+                <span class="feature-count" id="outputCodeCount"></span>
+            </div>
+            <div class="output-meta">
+                <span>Serial <strong id="outputSerial2"></strong></span>
+                <span id="outputFirmware2"></span>
+            </div>
+            <div id="individualCodesContainer" class="codes-list"></div>
+            <div class="output-actions">
+                <button id="copyAllCodesBtn" class="btn-secondary">Copy all</button>
+                <button id="downloadCodesBtn" class="btn-secondary">Download .txt</button>
+            </div>
+            <div class="howto">
+                <h3>How to enter</h3>
+                <ol>
+                    <li>Press <code>SETUP</code> on the machine</li>
+                    <li>Go to <code>FEATURES</code>, select the feature</li>
+                    <li>Type the 5-digit code, press <code>ENTER</code></li>
+                    <li>Feature shows &ldquo;Purchased&rdquo; &mdash; permanent, no reboot</li>
+                </ol>
+            </div>
+        </section>
+
+        <!-- USB key output -->
+        <section class="section output-section" id="fileOutputSection" style="display:none;">
+            <h2 class="section-title">HaasKey.txt</h2>
+            <div class="output-meta">
+                <span>Serial <strong id="outputSerial"></strong></span>
+                <span id="outputFirmware"></span>
+                <span>Expires <strong id="outputExpiry"></strong></span>
+                <span id="outputFeatures"></span>
+            </div>
+            <textarea id="keyOutput" readonly spellcheck="false"></textarea>
+            <div class="output-actions">
+                <button id="copyBtn" class="btn-secondary">Copy</button>
+                <button id="downloadBtn" class="btn-secondary">Download HaasKey.txt</button>
+            </div>
+            <div class="howto">
+                <h3>Deploy</h3>
+                <ol>
+                    <li>Save as <code>HaasKey.txt</code> on a USB drive</li>
+                    <li>Insert into the control, follow the on-screen prompt</li>
+                    <li>Verify under SETUP &rarr; FEATURES</li>
+                </ol>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <p>Individual codes use the verified CONTROLSTORM algorithm (CRC-16). For authorized use only.</p>
+        </footer>
+    </div>
+
+    <!-- 8-second generation overlay -->
+    <div id="progressOverlay" class="overlay" style="display:none;">
+        <div class="overlay-card">
+            <div class="overlay-title">Generating</div>
+            <div class="overlay-machine">Machine <strong id="progressSerial"></strong></div>
+            <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+            <div id="progressStep" class="progress-step">Initializing&hellip;</div>
+            <div id="progressLog" class="progress-log"></div>
+        </div>
+    </div>
+
+    <script src="aes.js"></script>
+    <script src="keygen.js"></script>
+</body>
+</html>
