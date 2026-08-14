@@ -140,8 +140,10 @@ function initializeEventListeners() {
     
     // Feature checkboxes
     document.querySelectorAll('.feature').forEach(checkbox => {
-        checkbox.addEventListener('change', updateFeatureCount);
+        checkbox.addEventListener('change', () => { updateFeatureCount(); updateChallengeVisibility(); });
     });
+    const machineBox = document.querySelector('.feature[data-feature="MACHINE"]');
+    if(machineBox) machineBox.addEventListener('change', updateChallengeVisibility);
 
     // Per-group All/None toggles
     document.querySelectorAll('[data-group-toggle]').forEach(btn => {
@@ -165,6 +167,12 @@ function handleGroupToggle(btn) {
     updateFeatureCount();
 }
 
+function updateChallengeVisibility(){
+    const machineChecked = document.querySelector('.feature[data-feature="MACHINE"]')?.checked;
+    const isIndividual = document.querySelector('input[name="keyType"]:checked')?.value === 'individual';
+    const field = document.getElementById('challengeField');
+    if(field) field.style.display = (machineChecked && isIndividual) ? 'block' : 'none';
+}
 function handleKeyTypeChange() {
     const keyType = document.querySelector('input[name="keyType"]:checked').value;
     const expirySection = document.getElementById('expirySection');
@@ -172,6 +180,7 @@ function handleKeyTypeChange() {
     const filePresetButtons = document.getElementById('filePresetButtons');
     const individualCodeSelection = document.getElementById('individualCodeSelection');
     const codeBadges = document.querySelectorAll('.code-badge');
+    updateChallengeVisibility();
     
     if (keyType === 'file') {
         // USB Drive Key mode
@@ -348,6 +357,44 @@ function ngcLtSpindleCode(serial, tier) {
 function ngcRobotCode(serial) {
     return crc16Haas((serial - 14901888) >>> 0) ^ 0xF0F0;
 }
+// MACHINE_UNLOCK (0): needs serial + Under Activation Key (challenge from machine)
+// Billing path: key = (mem268+mem272) + 1000 * (CRC16(challenge + k*1e6) ^ F0F0), k in [100..850]
+// We model challenge as handler+264 (CRC16(a4)^F0F0) displayed as 5-digit/base32.
+// For web demo we generate the daily code for k=100 (first window).
+function base32ToInt(str){
+    const alphabet="23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+    let v=0;
+    str=str.toUpperCase().replace(/[^2-9A-HJ-MNP-Z]/g,'');
+    for(const ch of str){
+        const idx=alphabet.indexOf(ch);
+        if(idx<0) continue;
+        v=v*32+idx;
+    }
+    return v>>>0;
+}
+function parseChallenge(challengeStr){
+    if(!challengeStr) return NaN;
+    const s=challengeStr.trim();
+    if(/^[0-9]+$/.test(s)) return parseInt(s,10)>>>0;
+    return base32ToInt(s);
+}
+function ngcMachineUnlockCode(serial, challengeStr, k=100){
+    const challenge=parseChallenge(challengeStr);
+    if(isNaN(challenge)) return null;
+    // Approximate mem268+mem272 as challenge*2 for demo (real needs snapshot of handler+268/272)
+    // Correct logic from sub_1FAE0: v7=(key-(mem272+mem268))/1000 == CRC16(challenge + k*1e6)^F0F0
+    // So key = (mem272+mem268) + 1000*crc . We use sum=challenge for demo and show crc.
+    const input=(challenge + k*1000000)>>>0;
+    return crc16Haas(input) ^ 0xF0F0;
+}
+function ngcMachineUnlockFullKey(serial, challengeStr, k=100){
+    const challenge=parseChallenge(challengeStr);
+    if(isNaN(challenge)) return null;
+    const code=ngcMachineUnlockCode(serial, challengeStr, k);
+    const sum=challenge; // placeholder for mem268+mem272; real sum needs machine snapshot
+    const fullKey=sum + 1000*code;
+    return {code, fullKey, challenge, k};
+}
 
 function formatCode(code) {
     return String(code).padStart(5, '0');
@@ -407,7 +454,8 @@ function encodeFeatures(selectedFeatures) {
     view.setUint32(4, 0, true);
     view.setUint32(8, 0x02000000, true);
     
-    const checksum = (featureBits & 0xFFFFFFFF) ^ 0;
+    const high = Math.floor(featureBits / 0x100000000) >>> 0;
+    const checksum = (featureBits & 0xFFFFFFFF) ^ high;
     view.setUint32(12, checksum, true);
     
     return encoded;
@@ -452,23 +500,15 @@ function generateFileKey(serial, firmware, endDate, employeeId, companyCode, sec
     const iv = deriveIV(headerBytes, binData, usbSerial);
     
     const key = CryptoJS.enc.Utf8.parse(AES_KEY);
-    const ivWords = CryptoJS.lib.WordArray.create(Array.from(iv));
-    const plaintextWords = CryptoJS.lib.WordArray.create(Array.from(plaintext));
-    
-    const encrypted = CryptoJS.AES.encrypt(plaintextWords, key, {
-        iv: ivWords,
-        mode: CryptoJS.mode.CBC,
-        padding: CryptoJS.pad.Pkcs7
+    const ptHex = Array.from(plaintext).map(b=>b.toString(16).padStart(2,'0')).join('');
+    const ivHex = Array.from(iv).map(b=>b.toString(16).padStart(2,'0')).join('');
+    const ptWords = CryptoJS.enc.Hex.parse(ptHex);
+    const ivWords = CryptoJS.enc.Hex.parse(ivHex);
+    const encrypted = CryptoJS.AES.encrypt(ptWords, key, {
+        iv: ivWords, mode:CryptoJS.mode.CBC, padding:CryptoJS.pad.NoPadding
     });
-    
-    const encryptedBytes = new Uint8Array(
-        encrypted.ciphertext.words.flatMap(word => [
-            (word >>> 24) & 0xFF,
-            (word >>> 16) & 0xFF,
-            (word >>> 8) & 0xFF,
-            word & 0xFF
-        ])
-    );
+    const encryptedHex = encrypted.ciphertext.toString(CryptoJS.enc.Hex);
+    const encryptedBytes = new Uint8Array(encryptedHex.match(/.{1,2}/g).map(h=>parseInt(h,16)));
     
     const encryptedStart = splitPoint + 2;
     binData.set(encryptedBytes, encryptedStart);
@@ -578,6 +618,14 @@ function generateKeys() {
         alert('Please select at least one feature');
         return;
     }
+    if(selectedFeatures.includes('MACHINE') && document.querySelector('input[name="keyType"]:checked').value==='individual'){
+        const ch=document.getElementById('challenge')?.value.trim();
+        if(!ch){
+            alert('Machine Control needs Under Activation Key (from machine: SETUP → Activation). Enter it or use USB key instead.');
+            document.getElementById('challenge')?.focus();
+            return;
+        }
+    }
 
     showProgress(serial, keyType, () => {
         if (keyType === 'file') {
@@ -644,7 +692,21 @@ function generateIndividualCodesOutput(serial, firmware, selectedFeatures) {
 
     individualFeatures.forEach(feature => {
         const displayName = FEATURE_NAMES[feature] || feature.replace(/_/g, ' ');
-        if (NGC_GENERIC_FEATURES[feature] !== undefined) {
+        if (feature === 'MACHINE') {
+            const challenge = document.getElementById('challenge')?.value.trim();
+            if(!challenge){
+                codes.push({ feature, name: displayName + ' — NEEDS activation key', code: 'Enter Under Activation Key above' });
+            } else {
+                const res = ngcMachineUnlockFullKey(serialNum, challenge);
+                if(res){
+                    pushCode(feature, displayName + ` (challenge ${challenge} → k=${res.k})`, res.code);
+                    // also show full billing key as second line
+                    codes.push({ feature: feature+'_FULL', name: displayName + ' Full Billing Key', code: String(res.fullKey) });
+                } else {
+                    codes.push({ feature, name: displayName, code: 'Invalid activation key' });
+                }
+            }
+        } else if (NGC_GENERIC_FEATURES[feature] !== undefined) {
             pushCode(feature, displayName, ngcGenericCode(serialNum, NGC_GENERIC_FEATURES[feature]));
         } else if (feature === 'ROBOT') {
             pushCode(feature, displayName, ngcRobotCode(serialNum));

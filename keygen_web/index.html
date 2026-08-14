@@ -61,6 +61,11 @@
                     </select>
                 </div>
             </div>
+            <div class="field" id="challengeField" style="display:none; margin-top:12px;">
+                <label for="challenge">Under Activation Key <span class="hint-inline">— from machine: SETUP → Activation (shown under serial)</span></label>
+                <input type="text" id="challenge" placeholder="e.g. 48291 or 2-9,A-H,J-N,P-Z base32" autocomplete="off">
+                <p class="hint" style="margin-top:6px;">Required only for <strong>Machine Control</strong>. Leave empty for all other features (serial only).</p>
+            </div>
         </section>
 
         <!-- Expiry (USB only) -->
@@ -105,7 +110,7 @@
                         <h3>Core</h3>
                         <button class="group-toggle" data-group-toggle>All</button>
                     </div>
-                    <label class="feature-checkbox"><input type="checkbox" class="feature" data-feature="MACHINE"><span class="box"></span><span class="name">Machine Control</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MACHINE" data-requires="challenge"><span class="box"></span><span class="name">Machine Control</span><span class="code-badge">CODE • needs activation key</span></label>
                     <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MACROS" checked><span class="box"></span><span class="name">Macro Programming</span><span class="code-badge">CODE</span></label>
                     <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="ROTATION_AND_SCALING" checked><span class="box"></span><span class="name">Rotation &amp; Scaling</span><span class="code-badge">CODE</span></label>
                     <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="RIGID_TAPPING" checked><span class="box"></span><span class="name">Rigid Tapping</span><span class="code-badge">CODE</span></label>
