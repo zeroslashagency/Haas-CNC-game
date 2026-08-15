@@ -171,7 +171,9 @@ function updateChallengeVisibility(){
     const machineChecked = document.querySelector('.feature[data-feature="MACHINE"]')?.checked;
     const isIndividual = document.querySelector('input[name="keyType"]:checked')?.value === 'individual';
     const field = document.getElementById('challengeField');
+    const hint = document.getElementById('machineHint');
     if(field) field.style.display = (machineChecked && isIndividual) ? 'block' : 'none';
+    if(hint) hint.style.display = (machineChecked && isIndividual) ? 'block' : 'none';
 }
 function handleKeyTypeChange() {
     const keyType = document.querySelector('input[name="keyType"]:checked').value;
@@ -699,9 +701,11 @@ function generateIndividualCodesOutput(serial, firmware, selectedFeatures) {
             } else {
                 const res = ngcMachineUnlockFullKey(serialNum, challenge);
                 if(res){
-                    pushCode(feature, displayName + ` (challenge ${challenge} → k=${res.k})`, res.code);
-                    // also show full billing key as second line
-                    codes.push({ feature: feature+'_FULL', name: displayName + ' Full Billing Key', code: String(res.fullKey) });
+                    // PR1 hotfix: single FULL KEY only (the machine expects fullKey, not 5-digit code)
+                    // Show ONE line: Full Billing Key, with hint that old 133091 is burned if EXPIRED
+                    pushCode(feature, displayName + ` (Activation Code ${challenge} → use this)`, res.fullKey);
+                    // store extra meta for download text
+                    codes[codes.length-1].hint = `If screen shows EXPIRED, reboot for NEW Activation Code — this key was for k=${res.k}`;
                 } else {
                     codes.push({ feature, name: displayName, code: 'Invalid activation key' });
                 }
