@@ -156,6 +156,10 @@ function initializeEventListeners() {
     // Copy buttons
     document.getElementById('copyBtn').addEventListener('click', copyToClipboard);
     document.getElementById('downloadBtn').addEventListener('click', downloadKey);
+    const autoBtn=document.getElementById('autoDeployBtn');
+    if(autoBtn) autoBtn.addEventListener('click', autoDeployToPendrive);
+    const sweepBtn=document.getElementById('sweepBtn');
+    if(sweepBtn) sweepBtn.addEventListener('click', downloadMachineSweep);
 }
 
 function handleGroupToggle(btn) {
@@ -732,6 +736,11 @@ function generateIndividualCodesOutput(serial, firmware, selectedFeatures) {
     document.getElementById('outputSerial2').textContent = serial;
     document.getElementById('outputFirmware2').textContent = `REL-100.${firmware}.xxx`;
     document.getElementById('outputCodeCount').textContent = `${codes.length} codes`;
+    const _sweepBtn=document.getElementById('sweepBtn');
+    const _sweepHint=document.getElementById('sweepHint');
+    const _hasMachine=individualFeatures.includes('MACHINE');
+    if(_sweepBtn) _sweepBtn.style.display=_hasMachine?'inline-block':'none';
+    if(_sweepHint) _sweepHint.style.display=_hasMachine?'block':'none';
     
     const container = document.getElementById('individualCodesContainer');
     container.innerHTML = '';
@@ -840,4 +849,42 @@ function downloadKey() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+}
+async function autoDeployToPendrive(){
+    const hex=document.getElementById('keyOutput')?.value;
+    const serial=document.getElementById('serial')?.value.trim()||'unknown';
+    if(!hex){ alert('Generate a key first'); return; }
+    try{
+        if(!window.showDirectoryPicker){
+            downloadKey();
+            alert('Auto deploy needs Chrome/Edge with File System Access. Downloaded HaasKey.txt — copy to FAT32 stick as HaasKey.txt');
+            return;
+        }
+        const dir=await window.showDirectoryPicker({mode:'readwrite'});
+        const fh=await dir.getFileHandle('HaasKey.txt',{create:true});
+        const w=await fh.createWritable();
+        await w.write(hex);
+        await w.close();
+        const btn=document.getElementById('autoDeployBtn');
+        const orig=btn.textContent; btn.textContent='Stored ✓ safely eject';
+        setTimeout(()=>btn.textContent=orig,2500);
+        document.getElementById('autoDeployHint').textContent=`Stored HaasKey.txt for ${serial} to ${dir.name} — safely eject, insert, reboot`;
+    }catch(e){
+        if(e.name==='AbortError') return;
+        alert('Auto deploy failed: '+e.message+' — using download');
+        downloadKey();
+    }
+}
+function downloadMachineSweep(){
+    const serial=document.getElementById('serial')?.value.trim();
+    const challenge=document.getElementById('challenge')?.value.trim();
+    if(!serial||!challenge){ alert('Need Serial + Under Activation Key'); return; }
+    let txt=`Haas MACHINE Sweep — Serial ${serial} Challenge ${challenge}\nGenerated ${new Date().toLocaleString()}\nTry in order k=100..149, first ALLOW wins (covers EXPIRED 133091 window)\n${'='.repeat(60)}\n\n`;
+    for(let k=100;k<150;k++){
+        const r=ngcMachineUnlockFullKey(parseInt(serial,10), challenge, k);
+        txt+=`k=${String(k).padStart(3,' ')}: ${String(r.fullKey).padStart(10,' ')} (code ${String(r.code).padStart(5,'0')})\n`;
+    }
+    txt+=`\nHow to use: Try k=100 key first on machine. If INVALID, try k=101, etc. First success clears dword_1FF950→100\n`;
+    const blob=new Blob([txt],{type:'text/plain'}); const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=`MACHINE_${serial}_${challenge}_sweep_k100-149.txt`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }

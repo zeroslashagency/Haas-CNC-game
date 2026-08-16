@@ -259,7 +259,9 @@
             <div class="output-actions">
                 <button id="copyAllCodesBtn" class="btn-secondary">Copy all</button>
                 <button id="downloadCodesBtn" class="btn-secondary">Download .txt</button>
+                <button id="sweepBtn" class="btn-secondary" style="display:none;">Download 50-Key Sweep (k=100..149)</button>
             </div>
+            <p id="sweepHint" class="hint" style="display:none; margin-top:8px;">For <strong>Machine Control EXPIRED</strong> — try sweep in order k=100→149, first <code>ALLOW</code> wins (covers burned <code>133091</code> window).</p>
             <div class="howto">
                 <h3>How to enter</h3>
                 <ol>
@@ -284,13 +286,15 @@
             <div class="output-actions">
                 <button id="copyBtn" class="btn-secondary">Copy</button>
                 <button id="downloadBtn" class="btn-secondary">Download HaasKey.txt</button>
+                <button id="autoDeployBtn" class="btn-primary" style="background:#0a7;">Auto Deploy to Pendrive</button>
             </div>
+            <p id="autoDeployHint" class="hint" style="margin-top:8px;">One click → pick your pendrive (FAT32) → writes <code>HaasKey.txt</code> perfectly (64 chars/line ×16). No manual copy.</p>
             <div class="howto">
                 <h3>Deploy</h3>
                 <ol>
-                    <li>Save as <code>HaasKey.txt</code> on a USB drive</li>
-                    <li>Insert into the control, follow the on-screen prompt</li>
-                    <li>Verify under SETUP &rarr; FEATURES</li>
+                    <li>Click <strong>Auto Deploy to Pendrive</strong> and pick your stick (grant write)</li>
+                    <li>Or save as <code>HaasKey.txt</code> on a FAT32 USB drive manually</li>
+                    <li>Insert into the control, reboot, verify under SETUP &rarr; FEATURES</li>
                 </ol>
             </div>
         </section>
