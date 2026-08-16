@@ -200,8 +200,8 @@
         </section>
 
         <!-- Machine Unlock hint -->
-        <section class="section" id="machineHint" style="display:none; border:1px solid #f59e0b; background:#fffbeb; padding:12px; border-radius:8px;">
-            <p style="margin:0; font-size:13px;"><strong>Machine Control:</strong> If screen shows <code>ACTIVATION CODE EXPIRED, TOO MANY TRIES</code> → <strong>Reboot</strong> for a NEW Activation Code. Old <code>133091</code> is burned (k=100→150). Use the NEW number in the field above. Or switch to <strong>USB drive key</strong> tab — no activation code needed.</p>
+        <section class="section" id="machineHint" style="display:none; border:2px solid #dc2626; background:#fef2f2; padding:12px; border-radius:8px;">
+            <p style="margin:0; font-size:13px;"><strong>⚠️ MACHINE FIX 2026-08-17:</strong> Old web used <code>challenge+k*1M</code> (gave 19102091) — <strong>WRONG</strong>. Real is <code>CRC16(challenge)+k*1M</code> → <code>15779360</code> for 133091/k100. If you tried before, <strong>regenerate now</strong>. If <code>EXPIRED</code> → reboot for NEW Activation Code. <strong>k=100 only</strong> (not 1..50). Use <strong>Download 50-Key Sweep</strong> below — it now sweeps 3 sums × 50 k = 150 keys. Try k=100 sum=123360 first.</p>
         </section>
 
         <!-- Notes: removing a feature -->

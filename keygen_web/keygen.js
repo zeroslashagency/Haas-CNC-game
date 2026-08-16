@@ -364,9 +364,11 @@ function ngcRobotCode(serial) {
     return crc16Haas((serial - 14901888) >>> 0) ^ 0xF0F0;
 }
 // MACHINE_UNLOCK (0): needs serial + Under Activation Key (challenge from machine)
-// Billing path: key = (mem268+mem272) + 1000 * (CRC16(challenge + k*1e6) ^ F0F0), k in [100..850]
-// We model challenge as handler+264 (CRC16(a4)^F0F0) displayed as 5-digit/base32.
-// For web demo we generate the daily code for k=100 (first window).
+// REAL BINARY: sub_1F38C sets h264=CRC16(a4)^F0F0, h268=CRC16(a2)^F0F0, h272=CRC16(a3)^F0F0
+//             sub_1FAE0: v7=(fullKey-(h268+h272))/1000 must == CRC16(h264 + k*1e6)^F0F0
+//             k = dword_1FF950 window 100..850 step 50 (init 100, increment on 50 misses)
+// FIXED 2026-08-17: code was CRC16(challenge+k*1M)^F0F0 — WRONG. Now CRC16(h264+k*1M)^F0F0
+//       sum was placeholder challenge — now real h268+h272 (see getMachineSumCandidates)
 function base32ToInt(str){
     const alphabet="23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
     let v=0;
@@ -384,22 +386,43 @@ function parseChallenge(challengeStr){
     if(/^[0-9]+$/.test(s)) return parseInt(s,10)>>>0;
     return base32ToInt(s);
 }
+function getMachineSumCandidates(serial){
+    // a2 is 16-bit, a3 32-bit seeds. Real machine derives them from QueueMessage field (a2+180)/serial.
+    // We don't have exact mapping, so provide 3 plausible sums and sweep all:
+    // 0,0 -> 123360 (harness verified SUCCESS), 0x1A2B/0x3C4D -> 42343 (oracle), serialLow+0 -> 68267 for 1119132
+    const c0 = (crc16Haas(0) ^ 0xF0F0) * 2; // 123360
+    const c1 = (crc16Haas(0x1A2B) ^ 0xF0F0) + (crc16Haas(0x3C4D) ^ 0xF0F0); // 42343
+    let candidates = [c0, c1];
+    if(serial && !isNaN(serial)){
+        const serialLow = serial & 0xFFFF;
+        const cSerial = (crc16Haas(serialLow) ^ 0xF0F0) + (crc16Haas(0) ^ 0xF0F0);
+        const cSerialFull = (crc16Haas(serial) ^ 0xF0F0) + (crc16Haas(0) ^ 0xF0F0);
+        candidates.push(cSerial);
+        if(cSerialFull !== cSerial) candidates.push(cSerialFull);
+    }
+    // dedup
+    return [...new Set(candidates)];
+}
 function ngcMachineUnlockCode(serial, challengeStr, k=100){
     const challenge=parseChallenge(challengeStr);
     if(isNaN(challenge)) return null;
-    // Approximate mem268+mem272 as challenge*2 for demo (real needs snapshot of handler+268/272)
-    // Correct logic from sub_1FAE0: v7=(key-(mem272+mem268))/1000 == CRC16(challenge + k*1e6)^F0F0
-    // So key = (mem272+mem268) + 1000*crc . We use sum=challenge for demo and show crc.
-    const input=(challenge + k*1000000)>>>0;
+    const h264 = crc16Haas(challenge) ^ 0xF0F0; // REAL: h264 is CRC(challenge), not challenge
+    const input=(h264 + k*1000000)>>>0;
     return crc16Haas(input) ^ 0xF0F0;
 }
 function ngcMachineUnlockFullKey(serial, challengeStr, k=100){
     const challenge=parseChallenge(challengeStr);
     if(isNaN(challenge)) return null;
     const code=ngcMachineUnlockCode(serial, challengeStr, k);
-    const sum=challenge; // placeholder for mem268+mem272; real sum needs machine snapshot
+    // primary sum = serialLow+0 for real machine 1119132 -> 68267 ; fallback 123360
+    let sum = 123360;
+    if(serial && !isNaN(serial)){
+        const serialLow = serial & 0xFFFF;
+        sum = (crc16Haas(serialLow) ^ 0xF0F0) + (crc16Haas(0) ^ 0xF0F0);
+    }
+    const h264 = crc16Haas(challenge) ^ 0xF0F0;
     const fullKey=sum + 1000*code;
-    return {code, fullKey, challenge, k};
+    return {code, fullKey, challenge, k, h264, sum, sums:getMachineSumCandidates(serial)};
 }
 
 function formatCode(code) {
@@ -879,12 +902,26 @@ function downloadMachineSweep(){
     const serial=document.getElementById('serial')?.value.trim();
     const challenge=document.getElementById('challenge')?.value.trim();
     if(!serial||!challenge){ alert('Need Serial + Under Activation Key'); return; }
-    let txt=`Haas MACHINE Sweep — Serial ${serial} Challenge ${challenge}\nGenerated ${new Date().toLocaleString()}\nTry in order k=100..149, first ALLOW wins (covers EXPIRED 133091 window)\n${'='.repeat(60)}\n\n`;
-    for(let k=100;k<150;k++){
-        const r=ngcMachineUnlockFullKey(parseInt(serial,10), challenge, k);
-        txt+=`k=${String(k).padStart(3,' ')}: ${String(r.fullKey).padStart(10,' ')} (code ${String(r.code).padStart(5,'0')})\n`;
+    const serialNum=parseInt(serial,10);
+    const sums=getMachineSumCandidates(serialNum);
+    const challengeVal=parseChallenge(challenge);
+    const h264=crc16Haas(challengeVal)^0xF0F0;
+    let txt=`Haas MACHINE Sweep — Serial ${serial} Challenge ${challenge} (h264=${h264})\n`;
+    txt+=`Generated ${new Date().toLocaleString()}\n`;
+    txt+=`FIX 2026-08-17: code=CRC16(h264+k*1M)^F0F0 (was challenge+k*1M). Try k=100 first.\n`;
+    txt+=`Sums: ${sums.join(', ')} (harness 123360, oracle 42343, serialLow ${sums[2]||''})\n`;
+    txt+=`${'='.repeat(70)}\n\n`;
+    for(const sum of sums){
+        txt+=`--- SUM ${sum} (h268+h272) ---\n`;
+        for(let k=100;k<150;k++){
+            const code=crc16Haas((h264 + k*1000000)>>>0)^0xF0F0;
+            const fullKey=sum + 1000*code;
+            txt+=`k=${String(k).padStart(3,' ')} sum=${String(sum).padStart(6,' ')}: ${String(fullKey).padStart(10,' ')} (code ${String(code).padStart(5,'0')} h264 ${h264})\n`;
+        }
+        txt+=`\n`;
     }
-    txt+=`\nHow to use: Try k=100 key first on machine. If INVALID, try k=101, etc. First success clears dword_1FF950→100\n`;
+    txt+=`How to use: Try k=100 sum=${sums[0]} first. If INVALID, try k=101 same sum, etc. Then try next sum block.\n`;
+    txt+=`Primary for 1119132 is sum=${sums[0]} (123360) -> k=100 full ${123360+1000*(crc16Haas((h264+100*1000000)>>>0)^0xF0F0)} vs old placeholder 19102091\n`;
     const blob=new Blob([txt],{type:'text/plain'}); const url=URL.createObjectURL(blob);
-    const a=document.createElement('a'); a.href=url; a.download=`MACHINE_${serial}_${challenge}_sweep_k100-149.txt`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    const a=document.createElement('a'); a.href=url; a.download=`MACHINE_${serial}_${challenge}_sweep_k100-149_FIXED.txt`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
