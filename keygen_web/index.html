@@ -203,8 +203,13 @@
             </div>
             <div class="field-row">
                 <div class="field" style="flex:1">
-                    <label for="stickSerial">USB stick serial <span class="hint-inline" style="color:#dc2626;font-weight:bold">— REQUIRED: ID_SERIAL_SHORT of THAT stick (udevadm info --query=all -n /dev/sdX | grep ID_SERIAL_SHORT)</span></label>
+                    <label for="stickSerial">USB stick serial <span class="hint-inline" style="color:#dc2626;font-weight:bold">— REQUIRED: ID_SERIAL_SHORT of THAT stick</span></label>
                     <input type="text" id="stickSerial" placeholder="e.g. 6E009184F6A68533" maxlength="16" autocomplete="off">
+                    <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <button type="button" id="detectSticksBtn" class="btn-secondary">Detect USB sticks (auto)</button>
+                        <select id="stickSelect" style="display:none; min-width:280px;"></select>
+                    </div>
+                    <span class="hint-inline" id="stickDetectHint" style="display:block; margin-top:6px;">One-time: run <code>python3 usb_agent.py</code> (from keygen_web folder) with the stick plugged in — then Detect fills the serial automatically. Manual fallback: <code>udevadm info --query=all -n /dev/sdX | grep ID_SERIAL_SHORT</code></span>
                 </div>
             </div>
         </section>

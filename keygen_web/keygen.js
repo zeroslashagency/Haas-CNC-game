@@ -158,6 +158,10 @@ function initializeEventListeners() {
     document.getElementById('downloadBtn').addEventListener('click', downloadKey);
     const autoBtn=document.getElementById('autoDeployBtn');
     if(autoBtn) autoBtn.addEventListener('click', autoDeployToPendrive);
+    const detectBtn=document.getElementById('detectSticksBtn');
+    if(detectBtn) detectBtn.addEventListener('click', detectUsbSticks);
+    const stickSel=document.getElementById('stickSelect');
+    if(stickSel) stickSel.addEventListener('change', applyStickSelection);
     const sweepBtn=document.getElementById('sweepBtn');
     if(sweepBtn) sweepBtn.addEventListener('click', downloadMachineSweep);
 }
@@ -895,10 +899,77 @@ function downloadKey() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 }
+// ---------------------------------------------------------------------------
+// Local USB agent (usb_agent.py on 127.0.0.1:7932) — auto-detect sticks + auto deploy.
+// Browsers cannot read a stick's hardware serial themselves (File System Access API
+// exposes no device info; WebUSB blocks mass-storage). The tiny local agent reads
+// ID_SERIAL_SHORT / serial_num via the OS and serves it to this page on localhost.
+// ---------------------------------------------------------------------------
+const USB_AGENT = 'http://127.0.0.1:7932';
+let agentSticks = [];
+
+async function detectUsbSticks(){
+    const hint = document.getElementById('stickDetectHint');
+    const sel = document.getElementById('stickSelect');
+    try{
+        const r = await fetch(USB_AGENT + '/sticks', { signal: AbortSignal.timeout(2500) });
+        if(!r.ok) throw new Error('agent http ' + r.status);
+        agentSticks = await r.json();
+        sel.innerHTML = '';
+        if(!agentSticks.length){
+            sel.innerHTML = '<option value="">(no USB stick found — insert FAT32 stick, click Detect again)</option>';
+        } else {
+            agentSticks.forEach((s, i) => {
+                const o = document.createElement('option');
+                o.value = i;
+                o.textContent = `${s.label || 'USB stick'} — ${s.mountpoint || s.device || 'unmounted'} — serial ${s.serial || '?'}`;
+                sel.appendChild(o);
+            });
+        }
+        sel.style.display = 'inline-block';
+        if(agentSticks.length === 1){ sel.selectedIndex = 0; applyStickSelection(); }
+        else if(agentSticks.length > 1) applyStickSelection();
+        if(hint) hint.textContent = `Agent OK — ${agentSticks.length} stick(s) detected. Pick one; serial fills in automatically.`;
+    }catch(e){
+        agentSticks = [];
+        if(hint) hint.innerHTML = 'Agent not running. One-time: <code>python3 usb_agent.py</code> (keygen_web folder) with the stick plugged in, then click Detect again.';
+    }
+}
+
+function applyStickSelection(){
+    const sel = document.getElementById('stickSelect');
+    const i = parseInt(sel?.value, 10);
+    const s = agentSticks[i];
+    if(!s) return;
+    if(s.serial) document.getElementById('stickSerial').value = s.serial;
+    const hint = document.getElementById('stickDetectHint');
+    if(hint) hint.textContent = `Selected: ${s.label || 'USB stick'} at ${s.mountpoint || s.device} — serial ${s.serial || 'unknown'} auto-filled. Generate, then Auto Deploy writes straight to the stick.`;
+}
+
 async function autoDeployToPendrive(){
     const hex=document.getElementById('keyOutput')?.value;
     const serial=document.getElementById('serial')?.value.trim()||'unknown';
     if(!hex){ alert('Generate a key first'); return; }
+    // Path 1: local agent — write HaasKey.txt directly to the detected stick
+    const i = parseInt(document.getElementById('stickSelect')?.value, 10);
+    const stick = agentSticks[i];
+    if(stick && stick.mountpoint){
+        try{
+            const r = await fetch(USB_AGENT + '/deploy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mountpoint: stick.mountpoint, filename: 'HaasKey.txt', content: hex })
+            });
+            const res = await r.json();
+            if(r.ok && res.ok){
+                document.getElementById('autoDeployHint').textContent =
+                    `HaasKey.txt written to ${res.path} (${res.bytes} bytes) — safely eject, insert into USB0 (rear port), reboot`;
+                return;
+            }
+            alert('Agent deploy failed: ' + (res.error || r.status));
+            return;
+        }catch(e){ /* agent gone — fall through to picker */ }
+    }
     try{
         if(!window.showDirectoryPicker){
             downloadKey();
