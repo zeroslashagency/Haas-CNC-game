@@ -67,7 +67,7 @@
                 <p class="hint" style="margin-top:6px;">Required only for <strong>Machine Control</strong>. Leave empty for all other features (serial only).</p>
             </div>
             <div class="field" id="macField" style="display:none; margin-top:12px;">
-                <label for="mac">MAC Address <span class="hint-inline">— shown in SETUP → Network/Machine Info (if visible, paste AA:BB:CC:DD:EE:FF)</span></label>
+                <label for="mac">MAC Address <span class="hint-inline" style="color:#dc2626;font-weight:bold">— REQUIRED: SETUP → Network/Machine Info (e.g. 00:1E:BF:00:9E:CB). No MAC = wrong key = burned try.</span></label>
                 <input type="text" id="mac" placeholder="e.g. 00:1A:2B:3C:4D:5E or 001A2B3C4D5E" autocomplete="off">
                 <p class="hint" style="margin-top:6px;">Radare2 `0x1F38C` uses `a2(16b)+a3(32b)` for sum `h268+h272`. On your control MAC is that `a2/a3`. If you see MAC, paste it — sweep will try MAC-derived sum first. Leave empty to sweep all.</p>
             </div>

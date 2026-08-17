@@ -430,9 +430,14 @@ function ngcMachineUnlockCode(serial, challengeStr, k=100){
 function ngcMachineUnlockFullKey(serial, challengeStr, k=100, macStr=null){
     const challenge=parseChallenge(challengeStr);
     if(isNaN(challenge)) return null;
+    // FIX 2026-08-17 (red-team class machine-missing-mac-fallback-bypass): MAC is REQUIRED.
+    // Without MAC the sum=h268+h272 cannot be known (fallback guesses 123360 etc. produce
+    // keys the machine REJECTS -> burns 1 of only 3 tries per challenge). Never guess.
+    const macVal = macStr || document.getElementById('mac')?.value;
+    if(!macVal || !parseMac(macVal)) return null;
     const code=ngcMachineUnlockCode(serial, challengeStr, k);
-    const sums=getMachineSumCandidates(serial, macStr || document.getElementById('mac')?.value);
-    let sum = sums[0];
+    const sums=getMachineSumCandidates(serial, macVal);
+    let sum = sums[0]; // MAC-derived sum is unshifted first when MAC present
     const h264 = crc16Haas(challenge) ^ 0xF0F0;
     const fullKey=sum + 1000*code;
     return {code, fullKey, challenge, k, h264, sum, sums};
@@ -663,8 +668,14 @@ function generateKeys() {
     if(selectedFeatures.includes('MACHINE') && document.querySelector('input[name="keyType"]:checked').value==='individual'){
         const ch=document.getElementById('challenge')?.value.trim();
         if(!ch){
-            alert('Machine Control needs Under Activation Key (from machine: SETUP → Activation). Enter it. If you see MAC in SETUP→Network, paste it too for better sum.');
+            alert('Machine Control needs Under Activation Key (from machine: SETUP → Activation). Enter it.');
             document.getElementById('challenge')?.focus();
+            return;
+        }
+        const mac=document.getElementById('mac')?.value.trim();
+        if(!mac || !parseMac(mac)){
+            alert('Machine Control REQUIRES the MAC Address (SETUP → Network/Machine Info, e.g. 00:1E:BF:00:9E:CB). Without MAC the key will be WRONG and burns 1 of your 3 tries.');
+            document.getElementById('mac')?.focus();
             return;
         }
     }
@@ -739,15 +750,15 @@ function generateIndividualCodesOutput(serial, firmware, selectedFeatures) {
             if(!challenge){
                 codes.push({ feature, name: displayName + ' — NEEDS activation key', code: 'Enter Under Activation Key above' });
             } else {
-                const res = ngcMachineUnlockFullKey(serialNum, challenge);
+                const res = ngcMachineUnlockFullKey(serialNum, challenge, 100, document.getElementById('mac')?.value.trim());
                 if(res){
                     // PR1 hotfix: single FULL KEY only (the machine expects fullKey, not 5-digit code)
-                    // Show ONE line: Full Billing Key, with hint that old 133091 is burned if EXPIRED
+                    // Show ONE line: Full Billing Key, with hint that old challenge is burned if EXPIRED
                     pushCode(feature, displayName + ` (Activation Code ${challenge} → use this)`, res.fullKey);
                     // store extra meta for download text
                     codes[codes.length-1].hint = `If screen shows EXPIRED, reboot for NEW Activation Code — this key was for k=${res.k}`;
                 } else {
-                    codes.push({ feature, name: displayName, code: 'Invalid activation key' });
+                    codes.push({ feature, name: displayName, code: 'MAC required (SETUP → Network) — no key generated' });
                 }
             }
         } else if (NGC_GENERIC_FEATURES[feature] !== undefined) {
@@ -916,6 +927,7 @@ function downloadMachineSweep(){
     const challenge=document.getElementById('challenge')?.value.trim();
     const mac=document.getElementById('mac')?.value.trim();
     if(!serial||!challenge){ alert('Need Serial + Under Activation Key'); return; }
+    if(!mac || !parseMac(mac)){ alert('MAC Address REQUIRED for sweep (SETUP → Network/Machine Info). Wrong sum = burned tries.'); return; }
     const serialNum=parseInt(serial,10);
     const sums=getMachineSumCandidates(serialNum, mac);
     const challengeVal=parseChallenge(challenge);
