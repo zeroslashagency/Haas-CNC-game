@@ -457,67 +457,6 @@ function formatCode(code) {
     return String(code).padStart(5, '0');
 }
 
-function deriveUSBSerial(machineSerial) {
-    const serialBytes = new TextEncoder().encode(machineSerial);
-    const usbSerial = new Uint8Array(16);
-    for (let i = 0; i < Math.min(serialBytes.length, 16); i++) {
-        usbSerial[i] = serialBytes[i];
-    }
-    return usbSerial;
-}
-
-function deriveIV(header, hexInput, usbSerial) {
-    const iv = new Uint8Array(16);
-    const xorKey = new Uint8Array(16);
-    
-    for (let i = 0; i < 4; i++) {
-        xorKey[i] = hexInput[i];
-    }
-    
-    for (let i = 0; i < 12; i++) {
-        xorKey[4 + i] = usbSerial[i];
-    }
-    
-    for (let i = 0; i < 16; i++) {
-        iv[i] = header[i] ^ xorKey[i];
-    }
-    
-    return iv;
-}
-
-function computeChecksum(data, splitPoint) {
-    let checksum = 0;
-    for (let i = 0; i < data.length; i++) {
-        if (i === splitPoint || i === splitPoint + 1) {
-            continue;
-        }
-        checksum = (checksum + data[i]) & 0xFFFF;
-    }
-    return checksum;
-}
-
-function encodeFeatures(selectedFeatures) {
-    let featureBits = 0;
-    selectedFeatures.forEach(feature => {
-        if (FEATURES[feature]) {
-            featureBits |= FEATURES[feature];
-        }
-    });
-    
-    const encoded = new Uint8Array(32);
-    const view = new DataView(encoded.buffer);
-    
-    view.setUint32(0, featureBits & 0xFFFFFFFF, true);
-    view.setUint32(4, 0, true);
-    view.setUint32(8, 0x02000000, true);
-    
-    const high = Math.floor(featureBits / 0x100000000) >>> 0;
-    const checksum = (featureBits & 0xFFFFFFFF) ^ high;
-    view.setUint32(12, checksum, true);
-    
-    return encoded;
-}
-
 // ---------------------------------------------------------------------------
 // REAL HaasKey.txt — forensic format from libStormSecurity.so DecryptKey (asm 2921-3598)
 // This key elevates SECURITY LEVEL (service dongle: FACTORY/SERVICE/MANAGER/DEVTEST).
