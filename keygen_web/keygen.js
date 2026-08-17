@@ -178,12 +178,15 @@ function handleGroupToggle(btn) {
 function updateChallengeVisibility(){
     const machineChecked = document.querySelector('.feature[data-feature="MACHINE"]')?.checked;
     const isIndividual = document.querySelector('input[name="keyType"]:checked')?.value === 'individual';
+    const show = (machineChecked && isIndividual) ? 'block' : 'none';
     const field = document.getElementById('challengeField');
     const macField = document.getElementById('macField');
+    const verField = document.getElementById('swversionField');
     const hint = document.getElementById('machineHint');
-    if(field) field.style.display = (machineChecked && isIndividual) ? 'block' : 'none';
-    if(macField) macField.style.display = (machineChecked && isIndividual) ? 'block' : 'none';
-    if(hint) hint.style.display = (machineChecked && isIndividual) ? 'block' : 'none';
+    if(field) field.style.display = show;
+    if(macField) macField.style.display = show;
+    if(verField) verField.style.display = show;
+    if(hint) hint.style.display = show;
 }
 function handleKeyTypeChange() {
     const keyType = document.querySelector('input[name="keyType"]:checked').value;
@@ -375,12 +378,21 @@ function ngcLtSpindleCode(serial, tier) {
 function ngcRobotCode(serial) {
     return crc16Haas((serial - 14901888) >>> 0) ^ 0xF0F0;
 }
-// MACHINE_UNLOCK (0): needs serial + Under Activation Key (challenge from machine)
-// REAL BINARY: sub_1F38C sets h264=CRC16(a4)^F0F0, h268=CRC16(a2)^F0F0, h272=CRC16(a3)^F0F0
-//             sub_1FAE0: v7=(fullKey-(h268+h272))/1000 must == CRC16(h264 + k*1e6)^F0F0
-//             k = dword_1FF950 window 100..850 step 50 (init 100, increment on 50 misses)
-// FIXED 2026-08-17: code was CRC16(challenge+k*1M)^F0F0 — WRONG. Now CRC16(h264+k*1M)^F0F0
-//       sum was placeholder challenge — now real h268+h272 (see getMachineSumCandidates)
+// MACHINE_UNLOCK (0) — GROUND TRUTH re-verified 2026-08-17 against CONTROLSTORM REL-100.23
+// disasm + JavaMain bytecode (see sandbox_verify_machine/REPORT.md):
+//   msg+0x08 = machinePoweronTime (int64) -> CRC1 = CRC16(powerOnTime & 0xFFFF)^F0F0   [h+0x108]
+//   msg+0x18 = macaddress (last 3 MAC bytes) -> CRC2 = CRC16(macInt & 0xFFFF)^F0F0     [h+0x10C]
+//   msg+0x14 = softwareversion (int, "100.23.000.1201"->230001201) -> CRC3 = CRC16(softVer)^F0F0 [h+0x110]
+//   Displayed "Under Activation Key" = CRC1 + CRC2 + CRC3  ([h+0x114] -> pseudoRandomNumber)
+// TWO independent accept paths in fcn.0001fae0:
+//   PERMANENT (legacy, sub_1F914/sub_1FA00): key == 1000*CRC16(serial+70M|700K)^F0F0 + CRC2 + CRC3
+//       -> [h+0x134]=1 -> response featureUnlock -> purchaseFeature(MACHINE_UNLOCK). No challenge,
+//       no k-window, no power-on-time race. 70M addend always (sub_1FA00), or 70M if serial>999999
+//       else 700K (sub_1F914) — identical for 7-digit serials.
+//   BILLING (k-loop): trunc((key-(CRC2+CRC3))/1000) == CRC16(CRC1 + k*1e6)^F0F0,
+//       k in [dword_1FF950, +50), fresh boot 100 -> [h+0x134]=2, daysPurchased = k-100.
+// ENTRY PARSING: activation screen parses the typed key with Base32ToInt (alphabet
+//   23456789ABCDEFGHJKLMNPQRSTUVWXYZ — '0'/'1' silently DROPPED) => keys must be given BASE32.
 function base32ToInt(str){
     const alphabet="23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
     let v=0;
@@ -402,55 +414,74 @@ function parseMac(macStr){
     if(!macStr) return null;
     let s=macStr.trim().replace(/[^0-9a-fA-F]/g,'');
     if(s.length!==12) return null;
-    // use low 16 + high 32 as seeds like a2/a3 (radare2 0x1F38C: a2=uxth, a3/a4 32b)
-    const low16 = parseInt(s.slice(8,12),16); // last 2 bytes
-    const high32 = parseInt(s.slice(0,8),16); // first 4 bytes
+    // Java getLastPartMacAddress(): display "XX:XX:XX:XX:XX:XX".substring(9) -> last 3 bytes.
+    // Firmware CRCs uxth(macInt) = last 2 bytes (leading zeros are no-ops for this CRC).
+    const low16 = parseInt(s.slice(8,12),16); // last 2 bytes == macInt & 0xFFFF
+    const high32 = parseInt(s.slice(0,8),16); // kept for reference; NOT used by firmware
     return {low16, high32, raw:s};
 }
-function getMachineSumCandidates(serial, macStr){
-    // a2(16b)+a3(32b) for h268+h272. Real = from QueueMessage -> likely MAC. Provide all.
-    const c0 = (crc16Haas(0) ^ 0xF0F0) * 2; // 123360 harness
-    const c1 = (crc16Haas(0x1A2B) ^ 0xF0F0) + (crc16Haas(0x3C4D) ^ 0xF0F0); // 42343 oracle
-    let candidates = [c0, c1];
-    if(serial && !isNaN(serial)){
-        const serialLow = serial & 0xFFFF;
-        const cSerial = (crc16Haas(serialLow) ^ 0xF0F0) + (crc16Haas(0) ^ 0xF0F0);
-        const cSerialFull = (crc16Haas(serial) ^ 0xF0F0) + (crc16Haas(0) ^ 0xF0F0);
-        candidates.push(cSerial);
-        if(cSerialFull !== cSerial) candidates.push(cSerialFull);
-    }
-    if(macStr){
-        const mac=parseMac(macStr);
-        if(mac){
-            const cMac = (crc16Haas(mac.low16) ^ 0xF0F0) + (crc16Haas(mac.high32) ^ 0xF0F0);
-            const cMacSwap = (crc16Haas(mac.high32 & 0xFFFF) ^ 0xF0F0) + (crc16Haas(parseInt(mac.raw.slice(4,12),16)) ^ 0xF0F0);
-            candidates.unshift(cMac); // MAC first if provided (screen shows MAC for a reason)
-            if(cMacSwap!==cMac) candidates.splice(1,0,cMacSwap);
-        }
-    }
-    return [...new Set(candidates)];
+// Java SoftwareVersion.softwareVersionForMagicCode():
+//   Integer.valueOf(getSoftwareVersion().replace(".","").substring(3))
+//   "100.23.000.1201" -> "100230001201" -> "230001201"
+function parseSoftwareVersion(v){
+    if(!v) return null;
+    let s=v.trim().replace(/^REL[- ]?/i,'').replace(/\./g,'');
+    if(!/^\d{4,}$/.test(s)) return null;
+    const n=parseInt(s.substring(3),10);
+    if(isNaN(n)||n<0||n>0xFFFFFFFF) return null;
+    return n>>>0;
 }
-function ngcMachineUnlockCode(serial, challengeStr, k=100){
+function ngcMachineParts(macStr, versionStr){
+    const mac=parseMac(macStr);
+    if(!mac) return null;
+    const softVer=parseSoftwareVersion(versionStr);
+    if(softVer===null) return null;
+    const crc2=crc16Haas(mac.low16)^0xF0F0;  // CRC16(macInt): upper zero bytes don't change this CRC
+    const crc3=crc16Haas(softVer)^0xF0F0;
+    return {crc2, crc3, softVer, mac};
+}
+// Base32 with the machine's alphabet (MathematicalConversions.Base32ToInt).
+// The activation screen DROPS '0'/'1' and base32-decodes, so all keys are shown base32.
+function base32Encode(n){
+    const alphabet="23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+    n=n>>>0;
+    if(n===0) return alphabet[0];
+    let s="";
+    while(n>0){ s=alphabet[n%32]+s; n=Math.floor(n/32); }
+    return s;
+}
+// PERMANENT machine unlock (legacy accept, checked first): no challenge, no k-window.
+// key = 1000*CRC16(serial + addend)^F0F0 + CRC2 + CRC3
+//   sub_1FA00 ([h+0x1c4]==0): addend = 70000000 always
+//   sub_1F914 ([h+0x1c4]!=0): addend = 70000000 if serial>999999 else 700000
+function ngcMachinePermanentKey(serial, macStr, versionStr){
+    const p=ngcMachineParts(macStr, versionStr);
+    if(!p) return null;
+    const mk=(addend)=>((1000*(crc16Haas((serial+addend)>>>0)^0xF0F0) + p.crc2 + p.crc3)>>>0);
+    const keyA=mk(70000000);                       // correct for every 7-digit serial; and for [h+0x1c4]==0
+    const keyB=serial>999999 ? keyA : mk(700000);  // only differs for short serials on [h+0x1c4]!=0
+    return {keyA, keyA_b32:base32Encode(keyA), keyB, keyB_b32:base32Encode(keyB),
+            differs:keyB!==keyA, crc2:p.crc2, crc3:p.crc3, softVer:p.softVer};
+}
+// BILLING (k-loop) key: needs the displayed Under Activation Key (challenge).
+// challenge = CRC1+CRC2+CRC3  =>  CRC1 = challenge - CRC2 - CRC3 (must be 0..65535, else
+// the MAC/version/challenge combo is inconsistent and the key would be WRONG).
+// Machine check: trunc((key-(CRC2+CRC3))/1000) == CRC16(CRC1 + k*1e6)^F0F0, k in [100,150) fresh.
+function ngcMachineUnlockFullKey(serial, challengeStr, k=100, macStr=null, versionStr=null){
     const challenge=parseChallenge(challengeStr);
     if(isNaN(challenge)) return null;
-    const h264 = crc16Haas(challenge) ^ 0xF0F0; // REAL: h264 is CRC(challenge), not challenge
-    const input=(h264 + k*1000000)>>>0;
-    return crc16Haas(input) ^ 0xF0F0;
-}
-function ngcMachineUnlockFullKey(serial, challengeStr, k=100, macStr=null){
-    const challenge=parseChallenge(challengeStr);
-    if(isNaN(challenge)) return null;
-    // FIX 2026-08-17 (red-team class machine-missing-mac-fallback-bypass): MAC is REQUIRED.
-    // Without MAC the sum=h268+h272 cannot be known (fallback guesses 123360 etc. produce
-    // keys the machine REJECTS -> burns 1 of only 3 tries per challenge). Never guess.
     const macVal = macStr || document.getElementById('mac')?.value;
-    if(!macVal || !parseMac(macVal)) return null;
-    const code=ngcMachineUnlockCode(serial, challengeStr, k);
-    const sums=getMachineSumCandidates(serial, macVal);
-    let sum = sums[0]; // MAC-derived sum is unshifted first when MAC present
-    const h264 = crc16Haas(challenge) ^ 0xF0F0;
-    const fullKey=sum + 1000*code;
-    return {code, fullKey, challenge, k, h264, sum, sums};
+    const verVal = versionStr || document.getElementById('swversion')?.value;
+    const p=ngcMachineParts(macVal, verVal);
+    if(!p) return null;
+    const crc1=challenge - p.crc2 - p.crc3;
+    if(crc1<0 || crc1>0xFFFF){
+        return {error:'crc1_range', crc1, crc2:p.crc2, crc3:p.crc3, challenge};
+    }
+    const code=crc16Haas((crc1 + k*1000000)>>>0)^0xF0F0;
+    const fullKey=(p.crc2 + p.crc3) + 1000*code;
+    return {code, fullKey, fullKey_b32:base32Encode(fullKey), challenge, k, crc1,
+            sum:p.crc2+p.crc3, crc2:p.crc2, crc3:p.crc3};
 }
 
 function formatCode(code) {
@@ -605,17 +636,25 @@ function generateKeys() {
         return;
     }
     if(selectedFeatures.includes('MACHINE') && document.querySelector('input[name="keyType"]:checked').value==='individual'){
-        const ch=document.getElementById('challenge')?.value.trim();
-        if(!ch){
-            alert('Machine Control needs Under Activation Key (from machine: SETUP → Activation). Enter it.');
-            document.getElementById('challenge')?.focus();
-            return;
-        }
         const mac=document.getElementById('mac')?.value.trim();
         if(!mac || !parseMac(mac)){
-            alert('Machine Control REQUIRES the MAC Address (SETUP → Network/Machine Info, e.g. 00:1E:BF:00:9E:CB). Without MAC the key will be WRONG and burns 1 of your 3 tries.');
+            alert('Machine Control REQUIRES the MAC Address (SETUP → Network/Machine Info, e.g. 00:1E:BF:00:9E:CB). The firmware CRCs it — wrong MAC = wrong key.');
             document.getElementById('mac')?.focus();
             return;
+        }
+        const ver=document.getElementById('swversion')?.value.trim();
+        if(!ver || parseSoftwareVersion(ver)===null){
+            alert('Machine Control REQUIRES the Software Version exactly as shown on the control (e.g. 100.23.000.1201). The firmware CRCs it — wrong version = wrong key.');
+            document.getElementById('swversion')?.focus();
+            return;
+        }
+        const ch=document.getElementById('challenge')?.value.trim();
+        if(ch){
+            // Pre-validate CRC1 = challenge - CRC2 - CRC3 range so a bad combo never reaches the machine
+            const probe=ngcMachineUnlockFullKey(parseInt(serial,10), ch, 100, mac, ver);
+            if(probe && probe.error==='crc1_range'){
+                alert(`Challenge ${ch} is INCONSISTENT with that MAC + Software Version (recovered CRC1=${probe.crc1}, must be 0..65535).\n\nRecheck the Software Version and the Under Activation Key digits. The PERMANENT key does not need the challenge and is shown regardless.`);
+            }
         }
     }
 
@@ -696,18 +735,28 @@ function generateIndividualCodesOutput(serial, firmware, selectedFeatures) {
         const displayName = FEATURE_NAMES[feature] || feature.replace(/_/g, ' ');
         if (feature === 'MACHINE') {
             const challenge = document.getElementById('challenge')?.value.trim();
-            if(!challenge){
-                codes.push({ feature, name: displayName + ' — NEEDS activation key', code: 'Enter Under Activation Key above' });
+            const mac = document.getElementById('mac')?.value.trim();
+            const ver = document.getElementById('swversion')?.value.trim();
+            const perm = ngcMachinePermanentKey(serialNum, mac, ver);
+            if(perm){
+                // PERMANENT key (legacy accept path): checked by the firmware BEFORE the k-loop,
+                // needs no challenge, no k-window, survives reboots (challenge-independent).
+                pushCode(feature, displayName + ' — PERMANENT key (type this first)', perm.keyA_b32);
+                codes[codes.length-1].hint = `Base32 — type exactly, letters included (machine keypad drops 0/1 by design). Decimal value ${perm.keyA}.`;
+                if(perm.differs){
+                    pushCode(feature, displayName + ' — PERMANENT key, variant B (only if A rejected)', perm.keyB_b32);
+                    codes[codes.length-1].hint = `Decimal value ${perm.keyB}. Only for short serials on some controls.`;
+                }
             } else {
-                const res = ngcMachineUnlockFullKey(serialNum, challenge, 100, document.getElementById('mac')?.value.trim());
-                if(res){
-                    // PR1 hotfix: single FULL KEY only (the machine expects fullKey, not 5-digit code)
-                    // Show ONE line: Full Billing Key, with hint that old challenge is burned if EXPIRED
-                    pushCode(feature, displayName + ` (Activation Code ${challenge} → use this)`, res.fullKey);
-                    // store extra meta for download text
-                    codes[codes.length-1].hint = `If screen shows EXPIRED, reboot for NEW Activation Code — this key was for k=${res.k}`;
-                } else {
-                    codes.push({ feature, name: displayName, code: 'MAC required (SETUP → Network) — no key generated' });
+                codes.push({ feature, name: displayName, code: 'MAC + Software Version required — no key generated' });
+            }
+            if(challenge){
+                const res = ngcMachineUnlockFullKey(serialNum, challenge, 100, mac, ver);
+                if(res && !res.error){
+                    pushCode(feature, displayName + ` — billing key (Activation Code ${challenge}, k=100)`, res.fullKey_b32);
+                    codes[codes.length-1].hint = `Only if PERMANENT fails. Challenge-bound: dies on reboot; fresh-boot window k=100. Decimal ${res.fullKey}.`;
+                } else if(res && res.error==='crc1_range'){
+                    codes.push({ feature, name: displayName + ' — billing key', code: `Challenge inconsistent (CRC1=${res.crc1}) — recheck version/challenge` });
                 }
             }
         } else if (NGC_GENERIC_FEATURES[feature] !== undefined) {
@@ -791,9 +840,11 @@ function generateIndividualCodesOutput(serial, firmware, selectedFeatures) {
         
         codes.forEach(c => {
             text += `${c.name}\n`;
-            text += `Unlock Code: ${c.code}\n\n`;
+            text += `Unlock Code: ${c.code}\n`;
+            if(c.hint) text += `Note: ${c.hint}\n`;
+            text += `\n`;
         });
-        
+
         text += `\n${'='.repeat(50)}\n`;
         text += `\nHow to Enter Codes:\n`;
         text += `1. Press SETUP on the machine\n`;
@@ -802,6 +853,9 @@ function generateIndividualCodesOutput(serial, firmware, selectedFeatures) {
         text += `4. Press ENTER CODE or UNLOCK\n`;
         text += `5. Type the unlock code\n`;
         text += `6. Press ENTER to activate\n`;
+        text += `\nMachine Control: the ACTIVATION screen reads keys as BASE32 (alphabet 2-9,A-H,J-N,P-Z —\n`;
+        text += `the digits 0 and 1 do not exist there by design). Type the key exactly as shown, letters included.\n`;
+        text += `Use the PERMANENT key first: it needs no challenge and never expires.\n`;
         
         const blob = new Blob([text], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
@@ -942,28 +996,42 @@ function downloadMachineSweep(){
     const serial=document.getElementById('serial')?.value.trim();
     const challenge=document.getElementById('challenge')?.value.trim();
     const mac=document.getElementById('mac')?.value.trim();
-    if(!serial||!challenge){ alert('Need Serial + Under Activation Key'); return; }
-    if(!mac || !parseMac(mac)){ alert('MAC Address REQUIRED for sweep (SETUP → Network/Machine Info). Wrong sum = burned tries.'); return; }
+    const ver=document.getElementById('swversion')?.value.trim();
+    if(!serial){ alert('Need Serial'); return; }
+    if(!mac || !parseMac(mac)){ alert('MAC Address REQUIRED (SETUP → Network/Machine Info). Wrong MAC = wrong key.'); return; }
+    if(!ver || parseSoftwareVersion(ver)===null){ alert('Software Version REQUIRED exactly as shown (e.g. 100.23.000.1201). Wrong version = wrong key.'); return; }
     const serialNum=parseInt(serial,10);
-    const sums=getMachineSumCandidates(serialNum, mac);
-    const challengeVal=parseChallenge(challenge);
-    const h264=crc16Haas(challengeVal)^0xF0F0;
-    let txt=`Haas MACHINE Sweep — Serial ${serial} Challenge ${challenge} (h264=${h264}) MAC ${mac||'(none)'}\n`;
+    const perm=ngcMachinePermanentKey(serialNum, mac, ver);
+    let txt=`Haas MACHINE Unlock — Serial ${serial} MAC ${mac} Version ${ver}\n`;
     txt+=`Generated ${new Date().toLocaleString()}\n`;
-    txt+=`Radare2 0x1F38C: h264=CRC16(a4) a4=challenge; sum=h268+h272 where h268=CRC16(a2) a2=16b MAC-low, h272=CRC16(a3) a3=32b MAC-high\n`;
-    txt+=`FIX 2026-08-17: code=CRC16(h264+k*1M)^F0F0 (was challenge+k*1M). k window 100..850 step 50, 3 tries per challenge then reboot.\n`;
-    txt+=`Sums sweep: ${sums.join(', ')} ${mac?'(MAC first)':'(no MAC: harness 123360 first)'}\n`;
+    txt+=`GROUND TRUTH 2026-08-17 (CONTROLSTORM REL-100.23 fcn.0001f38c/fcn.0001fae0 + JavaMain):\n`;
+    txt+=`  CRC2=CRC16(last-3-MAC-bytes & 0xFFFF)^F0F0=${perm.crc2}  CRC3=CRC16(softVerInt=${perm.softVer})^F0F0=${perm.crc3}\n`;
+    txt+=`  Activation screen parses typed keys as BASE32 (0/1 dropped) — keys below are base32.\n`;
     txt+=`${'='.repeat(78)}\n\n`;
-    for(const sum of sums){
-        txt+=`--- SUM ${sum} (h268+h272) ---\n`;
-        for(let k=100;k<150;k++){
-            const code=crc16Haas((h264 + k*1000000)>>>0)^0xF0F0;
-            const fullKey=sum + 1000*code;
-            txt+=`k=${String(k).padStart(3,' ')} sum=${String(sum).padStart(6,' ')}: ${String(fullKey).padStart(10,' ')} (code ${String(code).padStart(5,'0')} h264 ${h264})\n`;
+    txt+=`PERMANENT KEY (legacy accept, checked FIRST — no challenge, no k-window, survives reboots):\n`;
+    txt+=`  TYPE THIS: ${perm.keyA_b32}   (decimal ${perm.keyA})\n`;
+    if(perm.differs) txt+=`  Variant B (short-serial controls, only if A rejected): ${perm.keyB_b32}   (decimal ${perm.keyB})\n`;
+    txt+=`\n`;
+    if(challenge){
+        const challengeVal=parseChallenge(challenge);
+        const crc1=challengeVal - perm.crc2 - perm.crc3;
+        if(crc1>=0 && crc1<=0xFFFF){
+            txt+=`BILLING k-SWEEP for challenge ${challengeVal} (CRC1=${crc1}, fresh-boot window k=100..149):\n`;
+            for(let k=100;k<150;k++){
+                const code=crc16Haas((crc1 + k*1000000)>>>0)^0xF0F0;
+                const fullKey=(perm.crc2+perm.crc3) + 1000*code;
+                txt+=`  k=${String(k).padStart(3,' ')}: ${base32Encode(fullKey).padStart(8,' ')}  (decimal ${String(fullKey).padStart(10,' ')}, code ${String(code).padStart(5,'0')})\n`;
+            }
+            txt+=`\n`;
+        } else {
+            txt+=`BILLING k-SWEEP: challenge ${challengeVal} INCONSISTENT with MAC+version (CRC1=${crc1} out of 0..65535).\nRecheck the Under Activation Key digits and Software Version.\n\n`;
         }
-        txt+=`\n`;
+    } else {
+        txt+=`BILLING k-SWEEP: no challenge entered — skipped (not needed; PERMANENT key is the one you want).\n\n`;
     }
-    txt+=`How to use:\n1. This sweep is for CURRENT challenge only. After 3 INVALID → EXPIRED → REBOOT for NEW challenge → regenerate.\n2. Try k=100 sum=${sums[0]} first. If INVALID, try k=101 same sum, etc. Do MAX 2 per boot.\n3. If all 150 fail, paste MAC from SETUP→Network and regenerate — MAC-derived sum will be tried first.\n4. Success: handler+308=2 Purchased, dword_1FF950→100, challenge burned.\n`;
+    txt+=`How to use:\n1. Type the PERMANENT key on the ACTIVATION screen exactly as shown (letters included).\n`;
+    txt+=`2. The k-sweep is only a fallback: challenge-bound, k=100 first (fresh boot window), one try per boot is safest.\n`;
+    txt+=`3. After PERMANENT accept: featureUnlock -> purchaseFeature(MACHINE_UNLOCK) -> machine stays activated.\n`;
     const blob=new Blob([txt],{type:'text/plain'}); const url=URL.createObjectURL(blob);
-    const a=document.createElement('a'); a.href=url; a.download=`MACHINE_${serial}_${challenge}${mac?'_'+mac.replace(/:/g,''):''}_sweep_FIXED.txt`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    const a=document.createElement('a'); a.href=url; a.download=`MACHINE_${serial}_${mac.replace(/:/g,'')}_keys.txt`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }

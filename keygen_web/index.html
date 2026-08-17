@@ -62,14 +62,19 @@
                 </div>
             </div>
             <div class="field" id="challengeField" style="display:none; margin-top:12px;">
-                <label for="challenge">Under Activation Key <span class="hint-inline">— from machine: SETUP → Activation (shown under serial)</span></label>
-                <input type="text" id="challenge" placeholder="e.g. 48291 or 2-9,A-H,J-N,P-Z base32" autocomplete="off">
-                <p class="hint" style="margin-top:6px;">Required only for <strong>Machine Control</strong>. Leave empty for all other features (serial only).</p>
+                <label for="challenge">Under Activation Key <span class="hint-inline">— from machine: SETUP → Activation (shown under serial). OPTIONAL: only needed for the billing fallback key — the PERMANENT key does not use it.</span></label>
+                <input type="text" id="challenge" placeholder="e.g. 48291 (decimal as shown on screen)" autocomplete="off">
+                <p class="hint" style="margin-top:6px;">Shown only for <strong>Machine Control</strong>. The number on screen = CRC1+CRC2+CRC3 — the generator recovers CRC1 from it. Leave empty if you only want the PERMANENT key.</p>
             </div>
             <div class="field" id="macField" style="display:none; margin-top:12px;">
-                <label for="mac">MAC Address <span class="hint-inline" style="color:#dc2626;font-weight:bold">— REQUIRED: SETUP → Network/Machine Info (e.g. 00:1E:BF:00:9E:CB). No MAC = wrong key = burned try.</span></label>
+                <label for="mac">MAC Address <span class="hint-inline" style="color:#dc2626;font-weight:bold">— REQUIRED: SETUP → Network/Machine Info (e.g. 00:1E:BF:00:9E:CB). The firmware CRCs the last 3 bytes — wrong MAC = wrong key.</span></label>
                 <input type="text" id="mac" placeholder="e.g. 00:1A:2B:3C:4D:5E or 001A2B3C4D5E" autocomplete="off">
-                <p class="hint" style="margin-top:6px;">Radare2 `0x1F38C` uses `a2(16b)+a3(32b)` for sum `h268+h272`. On your control MAC is that `a2/a3`. If you see MAC, paste it — sweep will try MAC-derived sum first. Leave empty to sweep all.</p>
+                <p class="hint" style="margin-top:6px;">Verified against CONTROLSTORM 0x1F38C call site: the firmware CRCs <code>getLastPartMacAddress()</code> (last 3 MAC bytes). Copy it exactly off the screen.</p>
+            </div>
+            <div class="field" id="swversionField" style="display:none; margin-top:12px;">
+                <label for="swversion">Software Version <span class="hint-inline" style="color:#dc2626;font-weight:bold">— REQUIRED exactly as shown on the control (e.g. 100.23.000.1201). The firmware CRCs it — wrong version = wrong key.</span></label>
+                <input type="text" id="swversion" placeholder="e.g. 100.23.000.1201" autocomplete="off">
+                <p class="hint" style="margin-top:6px;">Java <code>softwareVersionForMagicCode()</code> = digits-only, first 3 dropped: "100.23.000.1201" → 230001201. Find it on the control's version/About screen.</p>
             </div>
         </section>
 
@@ -216,8 +221,8 @@
         </section>
 
         <!-- Machine Unlock hint -->
-        <section class="section" id="machineHint" style="display:none; border:2px solid #dc2626; background:#fef2f2; padding:12px; border-radius:8px;">
-            <p style="margin:0; font-size:13px;"><strong>⚠️ MACHINE FIX 2026-08-17:</strong> Old web used <code>challenge+k*1M</code> (gave 19102091) — <strong>WRONG</strong>. Real is <code>CRC16(challenge)+k*1M</code> → <code>15779360</code> for 133091/k100. If you tried before, <strong>regenerate now</strong>. If <code>EXPIRED</code> → reboot for NEW Activation Code. <strong>k=100 only</strong> (not 1..50). Use <strong>Download 50-Key Sweep</strong> below — it now sweeps 3 sums × 50 k = 150 keys. Try k=100 sum=123360 first.</p>
+        <section class="section" id="machineHint" style="display:none; border:2px solid #16a34a; background:#f0fdf4; padding:12px; border-radius:8px;">
+            <p style="margin:0; font-size:13px;"><strong>✅ MACHINE — ground truth 2026-08-17 (verified against CONTROLSTORM disasm):</strong> The firmware has a <strong>PERMANENT key</strong> (serial + MAC + software version only — no challenge, no k-window, survives reboots). It is checked <em>before</em> the challenge key loop. Type the <strong>PERMANENT</strong> key first, exactly as shown — the activation screen reads <strong>base32</strong> (digits 0/1 don't exist there, letters matter). The challenge-bound billing key is only a fallback.</p>
         </section>
 
         <!-- Notes: removing a feature -->
@@ -275,9 +280,9 @@
             <div class="output-actions">
                 <button id="copyAllCodesBtn" class="btn-secondary">Copy all</button>
                 <button id="downloadCodesBtn" class="btn-secondary">Download .txt</button>
-                <button id="sweepBtn" class="btn-secondary" style="display:none;">Download 50-Key Sweep (k=100..149)</button>
+                <button id="sweepBtn" class="btn-secondary" style="display:none;">Download MACHINE keys file (permanent + k-sweep)</button>
             </div>
-            <p id="sweepHint" class="hint" style="display:none; margin-top:8px;">For <strong>Machine Control EXPIRED</strong> — try sweep in order k=100→149, first <code>ALLOW</code> wins (covers burned <code>133091</code> window).</p>
+            <p id="sweepHint" class="hint" style="display:none; margin-top:8px;">Downloads a text file with the <strong>PERMANENT key</strong> (use this) plus the k=100..149 billing sweep for your challenge. All keys base32 — type exactly, letters included.</p>
             <div class="howto">
                 <h3>How to enter</h3>
                 <ol>
