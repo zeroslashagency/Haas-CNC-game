@@ -209,8 +209,9 @@
             </div>
             <div class="field-row">
                 <div class="field" style="flex:1">
-                    <label for="stickSerial">USB stick serial <span class="hint-inline" style="color:#dc2626;font-weight:bold">— REQUIRED: ID_SERIAL_SHORT of THAT stick</span></label>
-                    <input type="text" id="stickSerial" placeholder="e.g. 6E009184F6A68533" maxlength="16" autocomplete="off">
+                    <label for="stickSerial">USB stick serial <span class="hint-inline" style="color:#dc2626;font-weight:bold">— REQUIRED: the stick's hardware serial (any length — the machine uses the first 16 chars, bytecode-verified)</span></label>
+                    <input type="text" id="stickSerial" placeholder="e.g. 0950071171627108316 or 6E009184F6A68533" autocomplete="off">
+                    <p class="hint" style="margin-top:6px;">Windows: <code>Get-PhysicalDisk | Select FriendlyName, SerialNumber</code> (often 19–20 digits — paste it ALL). Linux/Haas: <code>udevadm info --query=all -n /dev/sdX | grep ID_SERIAL_SHORT</code>.</p>
                     <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                         <button type="button" id="detectSticksBtn" class="btn-secondary">Detect USB sticks (auto)</button>
                         <select id="stickSelect" style="display:none; min-width:280px;"></select>

@@ -670,7 +670,7 @@ function generateKeys() {
 function generateFileKeyOutput(serial, firmware, selectedFeatures) {
     const stickSerial = document.getElementById('stickSerial')?.value.trim();
     if (!stickSerial) {
-        alert('USB stick hardware serial REQUIRED — the key is bound to THAT stick, not the machine.\n\nOn any Linux (or the control itself via service mode):\nudevadm info --query=all -n /dev/sdX | grep ID_SERIAL_SHORT\n\nExample: 6E009184F6A68533');
+        alert('USB stick hardware serial REQUIRED — the key is bound to THAT stick, not the machine.\n\nWindows (PowerShell): Get-PhysicalDisk | Select FriendlyName, SerialNumber\nLinux / the control: udevadm info --query=all -n /dev/sdX | grep ID_SERIAL_SHORT\n\nPaste the FULL serial, any length (e.g. 0950071171627108316 or 6E009184F6A68533).\nThe machine uses the first 16 chars — verified against DecryptKey bytecode.');
         document.getElementById('stickSerial')?.focus();
         return;
     }
@@ -697,7 +697,10 @@ function generateFileKeyOutput(serial, firmware, selectedFeatures) {
         expiryDisplay = `${year}-${month}-${day}`;
     }
     
-    document.getElementById('outputSerial').textContent = `stick ${stickSerial}`;
+    const effSerial = stickSerial.slice(0, 16).split('').map(c => c === '\0' ? '*' : c).join('');
+    document.getElementById('outputSerial').textContent = stickSerial.length > 16
+        ? `stick ${stickSerial} → machine uses first 16: ${effSerial}`
+        : `stick ${stickSerial}`;
     document.getElementById('outputFirmware').textContent = 'any (format identical)';
     document.getElementById('outputExpiry').textContent = expiryDisplay;
     document.getElementById('outputFeatures').textContent = 'service level (no feature bits)';
