@@ -508,76 +508,64 @@ function encodeFeatures(selectedFeatures) {
     return encoded;
 }
 
-function generateFileKey(serial, firmware, endDate, employeeId, companyCode, securityLevel, selectedFeatures) {
-    const binData = new Uint8Array(512);
-    
-    const header = new TextEncoder().encode('HAAS0200');
-    binData.set(header, 0);
-    
-    const splitPoint = 0x40;
-    const splitView = new DataView(binData.buffer);
-    splitView.setUint16(0x1E, splitPoint, false);
-    
-    const plaintext = new Uint8Array(96);
-    let offset = 0;
-    
-    const levelByte = parseInt(securityLevel);
-    const levelStr = levelByte.toString(16).toUpperCase().padStart(2, '0');
-    const levelBytes = new TextEncoder().encode(levelStr);
-    plaintext.set(levelBytes, offset);
-    offset += 16;
-    
-    const empBytes = new TextEncoder().encode(employeeId.substring(0, 16));
-    plaintext.set(empBytes, offset);
-    offset += 16;
-    
-    const compBytes = new TextEncoder().encode(companyCode.substring(0, 16));
-    plaintext.set(compBytes, offset);
-    offset += 16;
-    
-    const dateBytes = new TextEncoder().encode(endDate.substring(0, 16));
-    plaintext.set(dateBytes, offset);
-    offset += 16;
-    
-    const featureData = encodeFeatures(selectedFeatures);
-    plaintext.set(featureData, offset);
-    
-    const usbSerial = deriveUSBSerial(serial);
-    const headerBytes = binData.slice(0, 16);
-    const iv = deriveIV(headerBytes, binData, usbSerial);
-    
-    const key = CryptoJS.enc.Utf8.parse(AES_KEY);
-    const ptHex = Array.from(plaintext).map(b=>b.toString(16).padStart(2,'0')).join('');
-    const ivHex = Array.from(iv).map(b=>b.toString(16).padStart(2,'0')).join('');
-    const ptWords = CryptoJS.enc.Hex.parse(ptHex);
-    const ivWords = CryptoJS.enc.Hex.parse(ivHex);
-    const encrypted = CryptoJS.AES.encrypt(ptWords, key, {
-        iv: ivWords, mode:CryptoJS.mode.CBC, padding:CryptoJS.pad.NoPadding
-    });
-    const encryptedHex = encrypted.ciphertext.toString(CryptoJS.enc.Hex);
-    const encryptedBytes = new Uint8Array(encryptedHex.match(/.{1,2}/g).map(h=>parseInt(h,16)));
-    
-    const encryptedStart = splitPoint + 2;
-    binData.set(encryptedBytes, encryptedStart);
-    
-    const signatureOffset = 0x120;
-    const seed = parseInt(serial) + levelByte;
-    for (let i = 0; i < 224; i++) {
-        binData[signatureOffset + i] = (seed * (i + 1)) & 0xFF;
-    }
-    
-    const checksum = computeChecksum(binData, splitPoint);
-    splitView.setUint16(splitPoint, checksum, false);
-    
-    let hexOutput = '';
-    for (let i = 0; i < binData.length; i++) {
-        hexOutput += binData[i].toString(16).toUpperCase().padStart(2, '0');
-        if ((i + 1) % 32 === 0 && i < binData.length - 1) {
-            hexOutput += '\n';
+// ---------------------------------------------------------------------------
+// REAL HaasKey.txt — forensic format from libStormSecurity.so DecryptKey (asm 2921-3598)
+// This key elevates SECURITY LEVEL (service dongle: FACTORY/SERVICE/MANAGER/DEVTEST).
+// It does NOT unlock features — features are the individual 5-digit activation codes.
+// Serial binding is to the PHYSICAL USB stick (ID_SERIAL_SHORT via udevadm), NOT the machine.
+// Layout: BE32@0x1E = checksumOfs V1(0x64) | BE32@0x96 = IVseedOfs V2(0xA8) | BE32@0xC8 = ctOfs V3(0x120)
+// IV = blob[V2..V2+16] XOR stickSerial(16, NUL->'*') | AES-128-CFB "HA45_AU70M4TI0N*" over blob[V3:0x200]
+// plaintext: level@0, employee@0x10, company "1213"@0x20, endDate "MM/dd/yyyy"@0x30 (16-byte fields)
+// checksum: BE16 at V1 = sum(all 512 bytes except V1,V1+1), must be <= 0xFFFF (32-bit compare)
+// file: ONE line, 1024 uppercase hex chars, NO newlines (.so parses fixed 2-char windows)
+// ---------------------------------------------------------------------------
+function generateFileKey(stickSerial, level, employeeId, endDateMDY) {
+    const blob = new Uint8Array(512);
+    blob.set([0x48, 0x41, 0x41, 0x53], 0); // "HAAS" (cosmetic — .so never checks it)
+    const dv = new DataView(blob.buffer);
+    const V1 = 0x64, V2 = 0xA8, V3 = 0x120;
+    dv.setUint32(0x1E, V1, false); // BE32 checksum offset
+    dv.setUint32(0x96, V2, false); // BE32 IV-seed offset
+    dv.setUint32(0xC8, V3, false); // BE32 ciphertext offset
+
+    const enc = new TextEncoder();
+    const pt = new Uint8Array(0x200 - V3); // 224 bytes
+    pt.set(enc.encode(level).slice(0, 16), 0x00);      // SERVICE / FACTORY / MANAGER / DEVTEST
+    pt.set(enc.encode(employeeId).slice(0, 16), 0x10);
+    pt.set(enc.encode('1213'), 0x20);                  // companyCode MUST be "1213" (Java verifyCompanyCode)
+    pt.set(enc.encode(endDateMDY).slice(0, 16), 0x30); // "MM/dd/yyyy", must be a future date
+
+    const usb = new Uint8Array(16);
+    usb.set(enc.encode(stickSerial).slice(0, 16));
+    for (let i = 0; i < 16; i++) if (usb[i] === 0) usb[i] = 0x2A; // NUL -> '*'
+
+    const key = CryptoJS.enc.Utf8.parse(AES_KEY); // "HA45_AU70M4TI0N*"
+    const ptWords = CryptoJS.enc.Hex.parse(Array.from(pt).map(b => b.toString(16).padStart(2, '0')).join(''));
+
+    let tries = 0;
+    while (true) {
+        const iv = new Uint8Array(16);
+        if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(iv);
+        else for (let i = 0; i < 16; i++) iv[i] = Math.floor(Math.random() * 256);
+        for (let i = 0; i < 16; i++) blob[V2 + i] = iv[i] ^ usb[i]; // IV seed stored on disk
+
+        const ivWords = CryptoJS.enc.Hex.parse(Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join(''));
+        const ct = CryptoJS.AES.encrypt(ptWords, key, { iv: ivWords, mode: CryptoJS.mode.CFB, padding: CryptoJS.pad.NoPadding });
+        const ctHex = ct.ciphertext.toString(CryptoJS.enc.Hex);
+        const ctBytes = new Uint8Array(ctHex.match(/.{1,2}/g).map(h => parseInt(h, 16)));
+        blob.set(ctBytes.slice(0, pt.length), V3);
+
+        let sum = 0;
+        for (let i = 0; i < 512; i++) if (i !== V1 && i !== V1 + 1) sum += blob[i];
+        if (sum <= 0xFFFF || ++tries > 100) {
+            blob[V1] = (sum >> 8) & 0xFF; // BE16 at V1
+            blob[V1 + 1] = sum & 0xFF;
+            break;
         }
     }
-    
-    return hexOutput;
+
+    // ONE line, 1024 uppercase hex chars, NO newlines
+    return Array.from(blob).map(b => b.toString(16).toUpperCase().padStart(2, '0')).join('');
 }
 
 // ---------------------------------------------------------------------------
@@ -690,14 +678,24 @@ function generateKeys() {
 }
 
 function generateFileKeyOutput(serial, firmware, selectedFeatures) {
+    const stickSerial = document.getElementById('stickSerial')?.value.trim();
+    if (!stickSerial) {
+        alert('USB stick hardware serial REQUIRED — the key is bound to THAT stick, not the machine.\n\nOn any Linux (or the control itself via service mode):\nudevadm info --query=all -n /dev/sdX | grep ID_SERIAL_SHORT\n\nExample: 6E009184F6A68533');
+        document.getElementById('stickSerial')?.focus();
+        return;
+    }
     const employeeId = document.getElementById('employeeId').value;
-    const companyCode = document.getElementById('companyCode').value;
-    const securityLevel = document.getElementById('securityLevel').value;
+    const level = document.getElementById('securityLevel').value; // FACTORY/SERVICE/MANAGER/DEVTEST
     const endDate = calculateExpiryDate();
-    
+
     if (!endDate) return;
-    
-    const hexOutput = generateFileKey(serial, firmware, endDate, employeeId, companyCode, securityLevel, selectedFeatures);
+
+    // Java verifyDate expects MM/dd/yyyy, must be a future date
+    const endDateMDY = (endDate === '99991231')
+        ? '12/31/2099'
+        : `${endDate.substring(4, 6)}/${endDate.substring(6, 8)}/${endDate.substring(0, 4)}`;
+
+    const hexOutput = generateFileKey(stickSerial, level, employeeId, endDateMDY);
     
     let expiryDisplay;
     if (endDate === '99991231') {

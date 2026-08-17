@@ -188,18 +188,23 @@
                     <input type="text" id="employeeId" value="00000" maxlength="16">
                 </div>
                 <div class="field">
-                    <label for="companyCode">Company code</label>
-                    <input type="text" id="companyCode" value="HAAS" maxlength="16">
+                    <label for="companyCode">Company code <span class="hint-inline">— fixed 1213 (Haas internal)</span></label>
+                    <input type="text" id="companyCode" value="1213" maxlength="16" readonly>
                 </div>
                 <div class="field">
                     <label for="securityLevel">Security level</label>
                     <select id="securityLevel">
-                        <option value="0x01">User</option>
-                        <option value="0x02">Operator</option>
-                        <option value="0x03">Supervisor</option>
-                        <option value="0x04">Administrator</option>
-                        <option value="0xFF" selected>Godmode</option>
+                        <option value="SERVICE" selected>Service</option>
+                        <option value="FACTORY">Factory</option>
+                        <option value="MANAGER">Manager</option>
+                        <option value="DEVTEST">DevTest</option>
                     </select>
+                </div>
+            </div>
+            <div class="field-row">
+                <div class="field" style="flex:1">
+                    <label for="stickSerial">USB stick serial <span class="hint-inline" style="color:#dc2626;font-weight:bold">— REQUIRED: ID_SERIAL_SHORT of THAT stick (udevadm info --query=all -n /dev/sdX | grep ID_SERIAL_SHORT)</span></label>
+                    <input type="text" id="stickSerial" placeholder="e.g. 6E009184F6A68533" maxlength="16" autocomplete="off">
                 </div>
             </div>
         </section>
