@@ -424,11 +424,18 @@ function parseMac(macStr){
 //   Integer.valueOf(getSoftwareVersion().replace(".","").substring(3))
 //   "100.23.000.1201" -> "100230001201" -> "230001201"
 function parseSoftwareVersion(v){
-    if(!v) return null;
-    let s=v.trim().replace(/^REL[- ]?/i,'').replace(/\./g,'');
-    if(!/^\d{4,}$/.test(s)) return null;
-    const n=parseInt(s.substring(3),10);
-    if(isNaN(n)||n<0||n>0xFFFFFFFF) return null;
+    if(!v) return null; // null only means "nothing entered" (required-field check)
+    // Faithful mirror of Java SoftwareVersion.softwareVersionForMagicCode():
+    //   n = 0; try { n = Integer.valueOf( getSoftwareVersion().replace(".","").substring(3) ); }
+    //          catch(Exception) { /* n stays 0 */ }
+    // So a version whose char[3..] is not a pure integer (e.g. NGC-M "M18.29B" -> "29B")
+    // yields softVer = 0 in the firmware. We must return 0, NOT null, to match the machine.
+    const s = v.trim().replace(/\./g,'');
+    if(s.length < 3) return 0;                 // substring(3) on <3 chars throws -> caught -> 0
+    const tail = s.substring(3);
+    if(!/^-?\d+$/.test(tail)) return 0;        // Integer.valueOf requires the whole string numeric
+    const n = parseInt(tail,10);
+    if(isNaN(n) || n<0 || n>0xFFFFFFFF) return 0;
     return n>>>0;
 }
 function ngcMachineParts(macStr, versionStr){
