@@ -1,28 +1,44 @@
 /* Haas CNC Key Generator — minimalist UI (v3.0) */
 
 :root {
-    --bg: #fafafa;
+    --bg: #fbfbfa;
     --surface: #ffffff;
-    --border: #e5e5e5;
-    --border-strong: #171717;
-    --text: #171717;
-    --text-dim: #737373;
+    --border: #ececec;
+    --border-strong: #111111;
+    --text: #141414;
+    --text-dim: #8a8a8a;
     --accent: #eab308;      /* Haas yellow */
     --accent-soft: #fef9c3;
     --ok: #16a34a;
+    --radius: 16px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+html { scroll-behavior: smooth; }
+
 body {
     background: var(--bg);
     color: var(--text);
     font-family: var(--sans);
     font-size: 15px;
-    line-height: 1.5;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+/* everything eases the same way — calm, consistent motion */
+button, input, select, .segment, .chip span, .feature-checkbox,
+.section, .code-item, .notes-chevron, .preset-btn {
+    transition-timing-function: var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    html { scroll-behavior: auto; }
 }
 
 /* ---------- password lock ---------- */
@@ -84,9 +100,20 @@ body:not(.locked) #lockOverlay { display: none; }
 .section {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 20px;
+    border-radius: var(--radius);
+    padding: 24px;
     margin-bottom: 16px;
+    transition: box-shadow .3s, border-color .3s;
+}
+.section:hover { box-shadow: 0 1px 3px rgba(0,0,0,0.03), 0 8px 24px rgba(0,0,0,0.03); }
+
+/* smooth reveal when a field/section toggles into view via JS */
+@keyframes revealField {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: none; }
+}
+#macField, #swversionField, #challengeField, #machineHint, #customDateSection {
+    animation: revealField .28s var(--ease);
 }
 .section-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 14px; }
 .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
@@ -101,33 +128,59 @@ body:not(.locked) #lockOverlay { display: none; }
 .segment-desc { display: block; font-size: 12px; color: var(--text-dim); margin-top: 2px; }
 .segment {
     border: 1.5px solid var(--border);
-    border-radius: 12px;
-    padding: 14px 16px;
-    transition: border-color .15s, background .15s;
+    border-radius: 14px;
+    padding: 16px 18px;
+    transition: border-color .2s, background .2s, transform .2s, box-shadow .25s;
 }
-.segment:hover { border-color: #d4d4d4; }
+.segment:hover { border-color: #d4d4d4; transform: translateY(-1px); }
 .segment:has(input:checked) {
     border-color: var(--border-strong);
     background: var(--accent-soft);
+    box-shadow: 0 4px 14px rgba(234,179,8,0.15);
 }
 
 /* ---------- fields ---------- */
-.field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-.field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; }
+.field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+.field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 7px; }
 .field input, .field select {
     width: 100%;
-    padding: 10px 12px;
-    font-size: 16px;
+    padding: 14px 16px;
+    font-size: 17px;
     font-family: inherit;
     border: 1.5px solid var(--border);
-    border-radius: 10px;
+    border-radius: 12px;
     background: var(--surface);
     color: var(--text);
     outline: none;
-    transition: border-color .15s;
+    transition: border-color .2s, box-shadow .25s, transform .25s, font-size .2s, padding .2s;
 }
-.field input:focus, .field select:focus { border-color: var(--border-strong); }
-#serial { font-family: var(--mono); letter-spacing: 0.05em; }
+.field input:hover, .field select:hover { border-color: #d6d6d6; }
+.field input:focus, .field select:focus {
+    border-color: var(--border-strong);
+    box-shadow: 0 0 0 4px rgba(20,20,20,0.05);
+    transform: translateY(-1px);
+}
+
+/* numeric inputs grow + go mono while you type — feels comfortable and deliberate */
+.field input[inputmode="numeric"],
+#serial, #challenge, #stickSerial, #employeeId {
+    font-family: var(--mono);
+    letter-spacing: 0.06em;
+}
+.field input[inputmode="numeric"]:focus,
+#serial:focus, #challenge:focus {
+    font-size: 21px;
+    padding: 16px 18px;
+    letter-spacing: 0.1em;
+}
+
+/* per-keystroke pop — added/removed from JS on every input event */
+@keyframes digit-pop {
+    0%   { transform: translateY(-1px) scale(1); }
+    40%  { transform: translateY(-1px) scale(1.018); box-shadow: 0 0 0 5px rgba(234,179,8,0.12); }
+    100% { transform: translateY(-1px) scale(1); }
+}
+.field input.typing { animation: digit-pop .18s var(--ease); }
 
 /* ---------- chips (expiry / presets) ---------- */
 .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -214,17 +267,17 @@ body:not(.locked) #lockOverlay { display: none; }
 .generate-bar { margin: 24px 0 8px; }
 .generate-btn {
     width: 100%;
-    padding: 16px;
+    padding: 17px;
     font-size: 16px; font-weight: 700; font-family: inherit;
     color: var(--text);
     background: var(--accent);
     border: none; border-radius: 14px;
     cursor: pointer;
-    transition: filter .15s, transform .05s;
+    transition: filter .2s, transform .15s, box-shadow .25s;
 }
-.generate-btn:hover { filter: brightness(0.95); }
-.generate-btn:active { transform: scale(0.99); }
-.generate-btn:disabled { opacity: .5; cursor: wait; }
+.generate-btn:hover { filter: brightness(0.97); transform: translateY(-1px); box-shadow: 0 8px 22px rgba(234,179,8,0.28); }
+.generate-btn:active { transform: translateY(0) scale(0.99); box-shadow: none; }
+.generate-btn:disabled { opacity: .5; cursor: wait; transform: none; box-shadow: none; }
 
 /* ---------- output ---------- */
 .output-section { animation: fadeUp .3s ease; }
@@ -241,8 +294,11 @@ body:not(.locked) #lockOverlay { display: none; }
     display: flex; align-items: center; gap: 12px;
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 12px 14px;
+    padding: 14px 16px;
+    transition: border-color .2s, box-shadow .25s, transform .2s;
+    animation: revealField .3s var(--ease) both;
 }
+.code-item:hover { border-color: #d6d6d6; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.04); }
 .code-feature-name { font-size: 14px; font-weight: 500; }
 .code-value {
     margin-left: auto;

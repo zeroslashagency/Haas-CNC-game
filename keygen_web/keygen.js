@@ -164,6 +164,25 @@ function initializeEventListeners() {
     if(stickSel) stickSel.addEventListener('change', applyStickSelection);
     const sweepBtn=document.getElementById('sweepBtn');
     if(sweepBtn) sweepBtn.addEventListener('click', downloadMachineSweep);
+
+    initInputAnimations();
+}
+
+// Per-keystroke "pop" on the numeric/key inputs. Pure UI — retriggers the
+// CSS animation by removing and re-adding the class on each input event.
+function initInputAnimations() {
+    const ids = ['serial', 'challenge', 'mac', 'swversion', 'stickSerial', 'employeeId'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if(!el) return;
+        el.addEventListener('input', () => {
+            el.classList.remove('typing');
+            // force reflow so the animation restarts cleanly every keystroke
+            void el.offsetWidth;
+            el.classList.add('typing');
+        });
+        el.addEventListener('animationend', () => el.classList.remove('typing'));
+    });
 }
 
 function handleGroupToggle(btn) {
