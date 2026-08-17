@@ -194,13 +194,15 @@ function handleKeyTypeChange() {
     const codeBadges = document.querySelectorAll('.code-badge');
     updateChallengeVisibility();
     
+    const serialField = document.getElementById('serialField');
     if (keyType === 'file') {
-        // USB Drive Key mode
+        // USB Drive Key mode — dongle format contains NO machine serial (bound to stick only)
         expirySection.style.display = 'block';
         advancedSection.style.display = 'block';
         filePresetButtons.style.display = 'flex';
         individualCodeSelection.style.display = 'none';
         codeBadges.forEach(badge => badge.style.display = 'none');
+        if(serialField) serialField.style.display = 'none';
     } else {
         // Individual Codes mode
         expirySection.style.display = 'none';
@@ -208,6 +210,7 @@ function handleKeyTypeChange() {
         filePresetButtons.style.display = 'none';
         individualCodeSelection.style.display = 'block';
         codeBadges.forEach(badge => badge.style.display = 'inline-block');
+        if(serialField) serialField.style.display = 'block';
     }
 }
 
@@ -646,14 +649,16 @@ function generateKeys() {
     const keyType = document.querySelector('input[name="keyType"]:checked').value;
     const serial = document.getElementById('serial').value.trim();
     const firmware = document.getElementById('firmware').value;
+    const isFile = (keyType === 'file');
 
-    if (!serial) {
+    // USB drive key: no machine serial and no features needed (service dongle = stick serial + level + date)
+    if (!isFile && !serial) {
         alert('Please enter a machine serial number');
         return;
     }
 
     const selectedFeatures = getSelectedFeatures();
-    if (selectedFeatures.length === 0) {
+    if (!isFile && selectedFeatures.length === 0) {
         alert('Please select at least one feature');
         return;
     }
@@ -672,7 +677,7 @@ function generateKeys() {
         }
     }
 
-    showProgress(serial, keyType, () => {
+    showProgress(isFile ? (document.getElementById('stickSerial')?.value.trim() || 'USB stick') : serial, keyType, () => {
         if (keyType === 'file') {
             generateFileKeyOutput(serial, firmware, selectedFeatures);
         } else {
@@ -711,10 +716,10 @@ function generateFileKeyOutput(serial, firmware, selectedFeatures) {
         expiryDisplay = `${year}-${month}-${day}`;
     }
     
-    document.getElementById('outputSerial').textContent = serial;
-    document.getElementById('outputFirmware').textContent = `REL-100.${firmware}.xxx`;
+    document.getElementById('outputSerial').textContent = `stick ${stickSerial}`;
+    document.getElementById('outputFirmware').textContent = 'any (format identical)';
     document.getElementById('outputExpiry').textContent = expiryDisplay;
-    document.getElementById('outputFeatures').textContent = `${selectedFeatures.length} features`;
+    document.getElementById('outputFeatures').textContent = 'service level (no feature bits)';
     document.getElementById('keyOutput').value = hexOutput;
     
     document.getElementById('fileOutputSection').style.display = 'block';
@@ -893,7 +898,7 @@ function downloadKey() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `HaasKey_${serial}.txt`;
+    a.download = 'HaasKey.txt'; // exact name the control looks for on USB0 root
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
