@@ -61,11 +61,6 @@
                     </select>
                 </div>
             </div>
-            <div class="field" id="challengeField" style="display:none; margin-top:12px;">
-                <label for="challenge">Under Activation Key <span class="hint-inline">— from machine: SETUP → Activation (shown under serial). OPTIONAL: only needed for the billing fallback key — the PERMANENT key does not use it.</span></label>
-                <input type="text" id="challenge" placeholder="e.g. 48291 (decimal as shown on screen)" autocomplete="off">
-                <p class="hint" style="margin-top:6px;">Shown only for <strong>Machine Control</strong>. The number on screen = CRC1+CRC2+CRC3 — the generator recovers CRC1 from it. Leave empty if you only want the PERMANENT key.</p>
-            </div>
             <div class="field" id="macField" style="display:none; margin-top:12px;">
                 <label for="mac">MAC Address <span class="hint-inline" style="color:#dc2626;font-weight:bold">— REQUIRED: SETUP → Network/Machine Info (e.g. 00:1E:BF:00:9E:CB). The firmware CRCs the last 3 bytes — wrong MAC = wrong key.</span></label>
                 <input type="text" id="mac" placeholder="e.g. 00:1A:2B:3C:4D:5E or 001A2B3C4D5E" autocomplete="off">
@@ -75,6 +70,11 @@
                 <label for="swversion">Software Version <span class="hint-inline" style="color:#dc2626;font-weight:bold">— REQUIRED exactly as shown on the control (e.g. 100.23.000.1201). The firmware CRCs it — wrong version = wrong key.</span></label>
                 <input type="text" id="swversion" placeholder="e.g. 100.23.000.1201" autocomplete="off">
                 <p class="hint" style="margin-top:6px;">Java <code>softwareVersionForMagicCode()</code> = digits-only, first 3 dropped: "100.23.000.1201" → 230001201. Find it on the control's version/About screen.</p>
+            </div>
+            <div class="field" id="challengeField" style="display:none; margin-top:12px;">
+                <label for="challenge">Under Activation Key <span class="hint-inline">— from machine: SETUP → Activation (shown under serial). OPTIONAL: only needed for the billing fallback key — the PERMANENT key does not use it.</span></label>
+                <input type="text" id="challenge" placeholder="e.g. 48291 (decimal as shown on screen)" autocomplete="off">
+                <p class="hint" style="margin-top:6px;">Shown only for <strong>Machine Control</strong>. The number on screen = CRC1+CRC2+CRC3 — the generator recovers CRC1 from it. Leave empty if you only want the PERMANENT key.</p>
             </div>
         </section>
 
