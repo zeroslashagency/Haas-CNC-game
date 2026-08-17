@@ -195,19 +195,22 @@ function handleKeyTypeChange() {
     updateChallengeVisibility();
     
     const serialField = document.getElementById('serialField');
+    const featuresSection = document.getElementById('featuresSection');
     if (keyType === 'file') {
-        // USB Drive Key mode — dongle format contains NO machine serial (bound to stick only)
+        // USB Drive Key mode — service dongle: NO machine serial, NO features (presets/checkboxes are fake here)
         expirySection.style.display = 'block';
         advancedSection.style.display = 'block';
-        filePresetButtons.style.display = 'flex';
+        if(featuresSection) featuresSection.style.display = 'none';
+        filePresetButtons.style.display = 'none';
         individualCodeSelection.style.display = 'none';
         codeBadges.forEach(badge => badge.style.display = 'none');
         if(serialField) serialField.style.display = 'none';
     } else {
-        // Individual Codes mode
+        // Individual Codes mode — feature checkboxes are REAL (5-digit codes vs sub_20734); presets = multi-select
         expirySection.style.display = 'none';
         advancedSection.style.display = 'none';
-        filePresetButtons.style.display = 'none';
+        if(featuresSection) featuresSection.style.display = 'block';
+        filePresetButtons.style.display = 'flex';
         individualCodeSelection.style.display = 'block';
         codeBadges.forEach(badge => badge.style.display = 'inline-block');
         if(serialField) serialField.style.display = 'block';

@@ -39,7 +39,7 @@
                 <label class="segment">
                     <input type="radio" name="keyType" value="file">
                     <span class="segment-label">USB drive key</span>
-                    <span class="segment-desc">HaasKey.txt file</span>
+                    <span class="segment-desc">service-level HaasKey.txt (no features)</span>
                 </label>
             </div>
         </section>
@@ -91,14 +91,14 @@
         </section>
 
         <!-- Features -->
-        <section class="section">
+        <section class="section" id="featuresSection">
             <div class="section-head">
                 <h2 class="section-title">Features</h2>
                 <span id="featureCount" class="feature-count">0 selected</span>
             </div>
 
             <div id="individualCodeSelection">
-                <p class="hint">Features marked <span class="code-badge">CODE</span> get a 5-digit keypad code. Others are USB-key only.</p>
+                <p class="hint">Features marked <span class="code-badge">CODE</span> get a 5-digit keypad code, entered on the machine's Features tab. Unmarked features are not supported (USB keys cannot enable options — proven from libStormSecurity.so).</p>
             </div>
 
             <div id="filePresetButtons" class="chip-row" style="display:none;">
@@ -106,7 +106,7 @@
                 <button class="preset-btn" data-preset="standard">Standard</button>
                 <button class="preset-btn" data-preset="advanced">Advanced</button>
                 <button class="preset-btn" data-preset="professional">Professional</button>
-                <button class="preset-btn active" data-preset="godmode">Godmode</button>
+                <button class="preset-btn" data-preset="godmode">All</button>
             </div>
 
             <div class="features-grid">
@@ -181,7 +181,8 @@
 
         <!-- Advanced (USB only) -->
         <section class="section" id="advancedSection" style="display:none;">
-            <h2 class="section-title">Advanced</h2>
+            <h2 class="section-title">USB service key</h2>
+            <p class="hint" style="margin:0 0 10px;">This key elevates the <strong>service level</strong> on the control (Service / Factory / Manager / DevTest menus, read once at boot). It does <strong>not</strong> enable machine options — options are 5-digit codes in <em>Individual codes</em> mode. Only these 4 things are real: level, employee ID, end date, and the stick it binds to.</p>
             <div class="field-row">
                 <div class="field">
                     <label for="employeeId">Employee ID</label>
