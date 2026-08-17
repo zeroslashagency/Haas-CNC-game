@@ -175,8 +175,10 @@ function updateChallengeVisibility(){
     const machineChecked = document.querySelector('.feature[data-feature="MACHINE"]')?.checked;
     const isIndividual = document.querySelector('input[name="keyType"]:checked')?.value === 'individual';
     const field = document.getElementById('challengeField');
+    const macField = document.getElementById('macField');
     const hint = document.getElementById('machineHint');
     if(field) field.style.display = (machineChecked && isIndividual) ? 'block' : 'none';
+    if(macField) macField.style.display = (machineChecked && isIndividual) ? 'block' : 'none';
     if(hint) hint.style.display = (machineChecked && isIndividual) ? 'block' : 'none';
 }
 function handleKeyTypeChange() {
@@ -386,12 +388,19 @@ function parseChallenge(challengeStr){
     if(/^[0-9]+$/.test(s)) return parseInt(s,10)>>>0;
     return base32ToInt(s);
 }
-function getMachineSumCandidates(serial){
-    // a2 is 16-bit, a3 32-bit seeds. Real machine derives them from QueueMessage field (a2+180)/serial.
-    // We don't have exact mapping, so provide 3 plausible sums and sweep all:
-    // 0,0 -> 123360 (harness verified SUCCESS), 0x1A2B/0x3C4D -> 42343 (oracle), serialLow+0 -> 68267 for 1119132
-    const c0 = (crc16Haas(0) ^ 0xF0F0) * 2; // 123360
-    const c1 = (crc16Haas(0x1A2B) ^ 0xF0F0) + (crc16Haas(0x3C4D) ^ 0xF0F0); // 42343
+function parseMac(macStr){
+    if(!macStr) return null;
+    let s=macStr.trim().replace(/[^0-9a-fA-F]/g,'');
+    if(s.length!==12) return null;
+    // use low 16 + high 32 as seeds like a2/a3 (radare2 0x1F38C: a2=uxth, a3/a4 32b)
+    const low16 = parseInt(s.slice(8,12),16); // last 2 bytes
+    const high32 = parseInt(s.slice(0,8),16); // first 4 bytes
+    return {low16, high32, raw:s};
+}
+function getMachineSumCandidates(serial, macStr){
+    // a2(16b)+a3(32b) for h268+h272. Real = from QueueMessage -> likely MAC. Provide all.
+    const c0 = (crc16Haas(0) ^ 0xF0F0) * 2; // 123360 harness
+    const c1 = (crc16Haas(0x1A2B) ^ 0xF0F0) + (crc16Haas(0x3C4D) ^ 0xF0F0); // 42343 oracle
     let candidates = [c0, c1];
     if(serial && !isNaN(serial)){
         const serialLow = serial & 0xFFFF;
@@ -400,7 +409,15 @@ function getMachineSumCandidates(serial){
         candidates.push(cSerial);
         if(cSerialFull !== cSerial) candidates.push(cSerialFull);
     }
-    // dedup
+    if(macStr){
+        const mac=parseMac(macStr);
+        if(mac){
+            const cMac = (crc16Haas(mac.low16) ^ 0xF0F0) + (crc16Haas(mac.high32) ^ 0xF0F0);
+            const cMacSwap = (crc16Haas(mac.high32 & 0xFFFF) ^ 0xF0F0) + (crc16Haas(parseInt(mac.raw.slice(4,12),16)) ^ 0xF0F0);
+            candidates.unshift(cMac); // MAC first if provided (screen shows MAC for a reason)
+            if(cMacSwap!==cMac) candidates.splice(1,0,cMacSwap);
+        }
+    }
     return [...new Set(candidates)];
 }
 function ngcMachineUnlockCode(serial, challengeStr, k=100){
@@ -410,19 +427,15 @@ function ngcMachineUnlockCode(serial, challengeStr, k=100){
     const input=(h264 + k*1000000)>>>0;
     return crc16Haas(input) ^ 0xF0F0;
 }
-function ngcMachineUnlockFullKey(serial, challengeStr, k=100){
+function ngcMachineUnlockFullKey(serial, challengeStr, k=100, macStr=null){
     const challenge=parseChallenge(challengeStr);
     if(isNaN(challenge)) return null;
     const code=ngcMachineUnlockCode(serial, challengeStr, k);
-    // primary sum = serialLow+0 for real machine 1119132 -> 68267 ; fallback 123360
-    let sum = 123360;
-    if(serial && !isNaN(serial)){
-        const serialLow = serial & 0xFFFF;
-        sum = (crc16Haas(serialLow) ^ 0xF0F0) + (crc16Haas(0) ^ 0xF0F0);
-    }
+    const sums=getMachineSumCandidates(serial, macStr || document.getElementById('mac')?.value);
+    let sum = sums[0];
     const h264 = crc16Haas(challenge) ^ 0xF0F0;
     const fullKey=sum + 1000*code;
-    return {code, fullKey, challenge, k, h264, sum, sums:getMachineSumCandidates(serial)};
+    return {code, fullKey, challenge, k, h264, sum, sums};
 }
 
 function formatCode(code) {
@@ -650,7 +663,7 @@ function generateKeys() {
     if(selectedFeatures.includes('MACHINE') && document.querySelector('input[name="keyType"]:checked').value==='individual'){
         const ch=document.getElementById('challenge')?.value.trim();
         if(!ch){
-            alert('Machine Control needs Under Activation Key (from machine: SETUP → Activation). Enter it or use USB key instead.');
+            alert('Machine Control needs Under Activation Key (from machine: SETUP → Activation). Enter it. If you see MAC in SETUP→Network, paste it too for better sum.');
             document.getElementById('challenge')?.focus();
             return;
         }
@@ -901,16 +914,18 @@ async function autoDeployToPendrive(){
 function downloadMachineSweep(){
     const serial=document.getElementById('serial')?.value.trim();
     const challenge=document.getElementById('challenge')?.value.trim();
+    const mac=document.getElementById('mac')?.value.trim();
     if(!serial||!challenge){ alert('Need Serial + Under Activation Key'); return; }
     const serialNum=parseInt(serial,10);
-    const sums=getMachineSumCandidates(serialNum);
+    const sums=getMachineSumCandidates(serialNum, mac);
     const challengeVal=parseChallenge(challenge);
     const h264=crc16Haas(challengeVal)^0xF0F0;
-    let txt=`Haas MACHINE Sweep — Serial ${serial} Challenge ${challenge} (h264=${h264})\n`;
+    let txt=`Haas MACHINE Sweep — Serial ${serial} Challenge ${challenge} (h264=${h264}) MAC ${mac||'(none)'}\n`;
     txt+=`Generated ${new Date().toLocaleString()}\n`;
-    txt+=`FIX 2026-08-17: code=CRC16(h264+k*1M)^F0F0 (was challenge+k*1M). Try k=100 first.\n`;
-    txt+=`Sums: ${sums.join(', ')} (harness 123360, oracle 42343, serialLow ${sums[2]||''})\n`;
-    txt+=`${'='.repeat(70)}\n\n`;
+    txt+=`Radare2 0x1F38C: h264=CRC16(a4) a4=challenge; sum=h268+h272 where h268=CRC16(a2) a2=16b MAC-low, h272=CRC16(a3) a3=32b MAC-high\n`;
+    txt+=`FIX 2026-08-17: code=CRC16(h264+k*1M)^F0F0 (was challenge+k*1M). k window 100..850 step 50, 3 tries per challenge then reboot.\n`;
+    txt+=`Sums sweep: ${sums.join(', ')} ${mac?'(MAC first)':'(no MAC: harness 123360 first)'}\n`;
+    txt+=`${'='.repeat(78)}\n\n`;
     for(const sum of sums){
         txt+=`--- SUM ${sum} (h268+h272) ---\n`;
         for(let k=100;k<150;k++){
@@ -920,8 +935,7 @@ function downloadMachineSweep(){
         }
         txt+=`\n`;
     }
-    txt+=`How to use: Try k=100 sum=${sums[0]} first. If INVALID, try k=101 same sum, etc. Then try next sum block.\n`;
-    txt+=`Primary for 1119132 is sum=${sums[0]} (123360) -> k=100 full ${123360+1000*(crc16Haas((h264+100*1000000)>>>0)^0xF0F0)} vs old placeholder 19102091\n`;
+    txt+=`How to use:\n1. This sweep is for CURRENT challenge only. After 3 INVALID → EXPIRED → REBOOT for NEW challenge → regenerate.\n2. Try k=100 sum=${sums[0]} first. If INVALID, try k=101 same sum, etc. Do MAX 2 per boot.\n3. If all 150 fail, paste MAC from SETUP→Network and regenerate — MAC-derived sum will be tried first.\n4. Success: handler+308=2 Purchased, dword_1FF950→100, challenge burned.\n`;
     const blob=new Blob([txt],{type:'text/plain'}); const url=URL.createObjectURL(blob);
-    const a=document.createElement('a'); a.href=url; a.download=`MACHINE_${serial}_${challenge}_sweep_k100-149_FIXED.txt`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    const a=document.createElement('a'); a.href=url; a.download=`MACHINE_${serial}_${challenge}${mac?'_'+mac.replace(/:/g,''):''}_sweep_FIXED.txt`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
