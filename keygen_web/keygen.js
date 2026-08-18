@@ -119,10 +119,37 @@ document.addEventListener('DOMContentLoaded', function() {
     initLock();
     initializeEventListeners();
     updateFeatureCount();
+    handleControlTypeChange();
     handleKeyTypeChange();
 });
 
+// ---------------------------------------------------------------------------
+// Control-type mode switch: NGC vs Classic (68K/ColdFire).
+// Toggles body.mode-ngc / body.mode-classic; CSS hides the other mode's UI.
+// ---------------------------------------------------------------------------
+function getControlType() {
+    return document.querySelector('input[name="controlType"]:checked')?.value || 'ngc';
+}
+function handleControlTypeChange() {
+    const t = getControlType();
+    document.body.classList.toggle('mode-ngc', t === 'ngc');
+    document.body.classList.toggle('mode-classic', t === 'classic');
+    // hide stale outputs from the other mode
+    if (t === 'classic') {
+        document.getElementById('individualOutputSection').style.display = 'none';
+        document.getElementById('fileOutputSection').style.display = 'none';
+    } else {
+        const co = document.getElementById('classicOutputSection');
+        if (co) co.style.display = 'none';
+    }
+}
+
 function initializeEventListeners() {
+    // Control type (NGC / Classic) selection
+    document.querySelectorAll('input[name="controlType"]').forEach(radio => {
+        radio.addEventListener('change', handleControlTypeChange);
+    });
+
     // Key type selection
     document.querySelectorAll('input[name="keyType"]').forEach(radio => {
         radio.addEventListener('change', handleKeyTypeChange);
@@ -209,26 +236,39 @@ function classicUnlockCode(serial, macStr, verStr){
     return {code:(1000*crcC + crcB + crcA)>>>0, crcA, crcB, crcC, mac, ver, addend};
 }
 function generateClassicColdfireCode(){
+    const section=document.getElementById('classicOutputSection');
     const out=document.getElementById('cfResult');
     const serial=parseInt((document.getElementById('cfSerial')?.value||'').trim(),10);
     const mac=(document.getElementById('cfMac')?.value||'').trim();
     const ver=(document.getElementById('cfVer')?.value||'').trim();
-    if(!out) return;
-    if(!(serial>0)){ out.style.display='block'; out.innerHTML='<strong style="color:#dc2626">Enter a valid serial number.</strong>'; return; }
+    if(!out||!section) return;
+    section.style.display='block';
+    if(!(serial>0)){
+        out.innerHTML='<strong style="color:#dc2626">Enter a valid serial number.</strong>';
+        section.scrollIntoView({behavior:'smooth', block:'start'});
+        return;
+    }
     const r=classicUnlockCode(serial, mac, ver);
-    if(!r){ out.style.display='block'; out.innerHTML='<strong style="color:#dc2626">Need serial + MAC (with colons, e.g. 00:1E:BF:00:9E:CB) + version (e.g. M18.29B).</strong>'; return; }
-    out.style.display='block';
+    if(!r){
+        out.innerHTML='<strong style="color:#dc2626">Need serial + MAC (with colons, e.g. 00:1E:BF:00:9E:CB) + version (e.g. M18.29B).</strong>';
+        section.scrollIntoView({behavior:'smooth', block:'start'});
+        return;
+    }
+    document.getElementById('cfOutputSerial').textContent=serial;
+    document.getElementById('cfOutputMac').textContent='MAC '+mac;
+    document.getElementById('cfOutputVer').textContent='VER '+ver;
     out.innerHTML =
         '<div>Permanent unlock code (type on the lease/registration entry):</div>'+
-        '<div style="font-size:22px; font-weight:bold; letter-spacing:2px; margin:4px 0;">'+r.code+'</div>'+
+        '<div style="font-size:26px; font-weight:bold; letter-spacing:2px; margin:4px 0;">'+r.code+'</div>'+
         '<div style="font-size:11px; color:#78716c;">CRC_C=crc(serial+'+r.addend+')='+r.crcC+' · CRC_B=crc(MAC 0x'+r.mac.toString(16).toUpperCase()+')='+r.crcB+' · CRC_A=crc(ver '+r.ver+')='+r.crcA+'</div>'+
         '<div style="font-size:11px; color:#78716c; margin-top:4px;">If the machine\'s Network screen shows a different MAC, re-enter it — the code changes. Or use Path A: type 0 into the BILL TIME field.</div>';
+    section.scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 // Per-keystroke "pop" on the numeric/key inputs. Pure UI — retriggers the
 // CSS animation by removing and re-adding the class on each input event.
 function initInputAnimations() {
-    const ids = ['serial', 'challenge', 'mac', 'swversion', 'stickSerial', 'employeeId'];
+    const ids = ['serial', 'challenge', 'mac', 'swversion', 'stickSerial', 'employeeId', 'cfSerial', 'cfMac', 'cfVer'];
     ids.forEach(id => {
         const el = document.getElementById(id);
         if(!el) return;
@@ -263,8 +303,6 @@ function updateChallengeVisibility(){
     if(macField) macField.style.display = show;
     if(verField) verField.style.display = show;
     if(hint) hint.style.display = show;
-    const cf = document.getElementById('coldfireHint');
-    if(cf) cf.style.display = show;
 }
 function handleKeyTypeChange() {
     const keyType = document.querySelector('input[name="keyType"]:checked').value;
@@ -704,6 +742,7 @@ function showProgress(serial, keyType, onDone) {
 }
 
 function generateKeys() {
+    if (getControlType() === 'classic') { generateClassicColdfireCode(); return; }
     const keyType = document.querySelector('input[name="keyType"]:checked').value;
     const serial = document.getElementById('serial').value.trim();
     const firmware = document.getElementById('firmware').value;

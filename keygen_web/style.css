@@ -96,6 +96,19 @@ body:not(.locked) #lockOverlay { display: none; }
 }
 .subtitle { color: var(--text-dim); font-size: 13px; margin-top: 4px; }
 
+/* ---------- control-type mode toggle ---------- */
+body.mode-ngc .classic-only { display: none !important; }
+body.mode-classic .ngc-only { display: none !important; }
+body.mode-classic .classic-only { display: block; animation: revealField .28s var(--ease); }
+body.mode-classic .classic-only.generate-bar { display: flex; }
+
+.mode-id-table { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.mode-id-row { display: grid; grid-template-columns: 2fr 1.4fr; }
+.mode-id-row + .mode-id-row { border-top: 1px solid var(--border); }
+.mode-id-cell { padding: 10px 12px; font-size: 12.5px; line-height: 1.45; color: var(--text); }
+.mode-id-cell + .mode-id-cell { border-left: 1px solid var(--border); }
+.mode-id-head { background: var(--surface-dim, #f5f5f4); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; font-size: 11px; color: var(--text-dim); }
+
 /* ---------- sections ---------- */
 .section {
     background: var(--surface);

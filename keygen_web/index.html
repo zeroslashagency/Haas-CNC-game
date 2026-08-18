@@ -22,13 +22,44 @@
         <header class="header">
             <div class="header-row">
                 <h1>Haas CNC Key Generator</h1>
-                <span class="version">v3.0</span>
+                <span class="version">v3.1</span>
             </div>
-            <p class="subtitle">Storm Security &middot; REL-100.17 / 100.18 / 100.23 &middot; verified NGC algorithm &middot; <span style="color:#d97706;">NGC controls only — classic 68K/ColdFire (M18/M17) have no computable code</span></p>
+            <p class="subtitle">Storm Security &middot; two control generations, two real algorithms &middot; pick your control type first</p>
         </header>
 
+        <!-- Control type (top-level mode switch) -->
+        <section class="section" id="controlTypeSection">
+            <h2 class="section-title">Control type — pick first</h2>
+            <div class="segmented" id="controlTypeSwitch">
+                <label class="segment">
+                    <input type="radio" name="controlType" value="ngc" checked>
+                    <span class="segment-label">NGC — Next Gen Control</span>
+                    <span class="segment-desc">touchscreen; screen says "MACHINE ACTIVATION / ENTER THE KEY" — CRC challenge/response</span>
+                </label>
+                <label class="segment">
+                    <input type="radio" name="controlType" value="classic">
+                    <span class="segment-label">Classic — 68K/ColdFire</span>
+                    <span class="segment-desc">M16 / M17 / M18 keypad control — lease/billing unlock</span>
+                </label>
+            </div>
+            <div class="mode-id-table">
+                <div class="mode-id-row">
+                    <div class="mode-id-cell mode-id-head">Your screen shows…</div>
+                    <div class="mode-id-cell mode-id-head">Then it is</div>
+                </div>
+                <div class="mode-id-row">
+                    <div class="mode-id-cell"><strong>MACHINE ACTIVATION</strong> · SERIAL NUMBER · MAC ADDRESS · <strong>ACTIVATION CODE</strong> (6 rotating digits) · ENTER THE KEY · INVALID KEY. TRY AGAIN</div>
+                    <div class="mode-id-cell"><strong>NGC</strong> (even if the version reads "M18.29B" — that label appears on NGC-M too; verified against live screen 2026-08-18)</div>
+                </div>
+                <div class="mode-id-row">
+                    <div class="mode-id-cell">Older monochrome/keypad control, <strong>BILLING</strong> / lease-timer diagnostic page, "ENTER BILL TIME AS A LONG", no ACTIVATION CODE screen</div>
+                    <div class="mode-id-cell"><strong>Classic</strong></div>
+                </div>
+            </div>
+        </section>
+
         <!-- Key Type -->
-        <section class="section">
+        <section class="section ngc-only">
             <h2 class="section-title">Key type</h2>
             <div class="segmented">
                 <label class="segment">
@@ -45,7 +76,7 @@
         </section>
 
         <!-- Machine -->
-        <section class="section">
+        <section class="section ngc-only">
             <h2 class="section-title">Machine</h2>
             <div class="field-row">
                 <div class="field" id="serialField">
@@ -79,7 +110,7 @@
         </section>
 
         <!-- Expiry (USB only) -->
-        <section class="section" id="expirySection" style="display:none;">
+        <section class="section ngc-only" id="expirySection" style="display:none;">
             <h2 class="section-title">Expiration</h2>
             <div class="chip-row">
                 <label class="chip"><input type="radio" name="expiry" value="unlimited" checked><span>Unlimited</span></label>
@@ -96,7 +127,7 @@
         </section>
 
         <!-- Features -->
-        <section class="section" id="featuresSection">
+        <section class="section ngc-only" id="featuresSection">
             <div class="section-head">
                 <h2 class="section-title">Features</h2>
                 <span id="featureCount" class="feature-count">0 selected</span>
@@ -185,7 +216,7 @@
         </section>
 
         <!-- Advanced (USB only) -->
-        <section class="section" id="advancedSection" style="display:none;">
+        <section class="section ngc-only" id="advancedSection" style="display:none;">
             <h2 class="section-title">USB service key</h2>
             <p class="hint" style="margin:0 0 10px;">This key elevates the <strong>service level</strong> on the control (Service / Factory / Manager / DevTest menus, read once at boot). It does <strong>not</strong> enable machine options — options are 5-digit codes in <em>Individual codes</em> mode. Only these 4 things are real: level, employee ID, end date, and the stick it binds to.</p>
             <div class="field-row">
@@ -222,30 +253,61 @@
         </section>
 
         <!-- Machine Unlock hint -->
-        <section class="section" id="machineHint" style="display:none; border:2px solid #16a34a; background:#f0fdf4; padding:12px; border-radius:8px;">
+        <section class="section ngc-only" id="machineHint" style="display:none; border:2px solid #16a34a; background:#f0fdf4; padding:12px; border-radius:8px;">
             <p style="margin:0; font-size:13px;"><strong>✅ MACHINE — ground truth 2026-08-17 (verified against CONTROLSTORM disasm):</strong> The firmware has a <strong>PERMANENT key</strong> (serial + MAC + software version only — no challenge, no k-window, survives reboots). It is checked <em>before</em> the challenge key loop. Type the <strong>PERMANENT</strong> key first, exactly as shown — the activation screen reads <strong>base32</strong> (digits 0/1 don't exist there, letters matter). The challenge-bound billing key is only a fallback.</p>
         </section>
 
-        <!-- Classic ColdFire control caveat + generator -->
-        <section class="section" id="coldfireHint" style="display:none; border:2px solid #d97706; background:#fffbeb; padding:12px; border-radius:8px;">
-            <p style="margin:0 0 6px 0; font-size:13px;"><strong>⚠️ Is your control a CLASSIC Haas (68K/ColdFire)?</strong> If the machine shows a version like <strong>M18.xx</strong>, <strong>M17.xx</strong>, <strong>M16.xx</strong> (Mill/Lathe classic control, not the NGC "Next Generation Control"), the NGC key above does <strong>not</strong> apply — use the classic generator below instead.</p>
-            <p style="margin:0 0 6px 0; font-size:13px;">Verified 2026-08-18 against <code>M1829B.BIN</code> (ColdFire, base 0x10020000; radare2 + Ghidra Coldfire). The classic lock is an 8-byte <strong>lease record in battery-backed RAM</strong> (expiration / due / remaining); "FULLY PAID" = that record is all zeros. There are <strong>two</strong> ways in:</p>
-            <p style="margin:0 0 6px 0; font-size:13px;"><strong>Path A (no code):</strong> On the Diagnostic <strong>BILLING</strong> page, type <code>0</code> into the <strong>"ENTER BILL TIME AS A LONG"</strong> field and confirm (any softkey except the S/cancel key). This drives <code>clear_lease</code> and persists.</p>
-            <p style="margin:0 0 8px 0; font-size:13px;"><strong>Path B (permanent code):</strong> The lease-registration entry runs a value-match (<code>reset_lease</code> @0x10232bac, gate cmp @0x10cec6) against a CRC-16 computed from serial + MAC + version. Generate that code here:</p>
-
-            <div class="field-row" style="gap:8px;">
-                <div class="field"><label for="cfSerial" style="font-size:12px;">Serial No. (from screen)</label><input type="text" id="cfSerial" inputmode="numeric" placeholder="1119132" value="1119132" autocomplete="off"></div>
-                <div class="field"><label for="cfMac" style="font-size:12px;">MAC Address (from screen)</label><input type="text" id="cfMac" placeholder="00:1E:BF:00:9E:CB" value="00:1E:BF:00:9E:CB" autocomplete="off"></div>
-                <div class="field"><label for="cfVer" style="font-size:12px;">Version (as shown)</label><input type="text" id="cfVer" placeholder="M18.29B" value="M18.29B" autocomplete="off"></div>
+        <!-- ================= CLASSIC MODE ================= -->
+        <section class="section classic-only" id="classicMachine" style="display:none;">
+            <h2 class="section-title">Classic machine</h2>
+            <div class="field-row">
+                <div class="field">
+                    <label for="cfSerial">Serial No. <span class="hint-inline">— from the machine screen</span></label>
+                    <input type="text" id="cfSerial" inputmode="numeric" placeholder="1119132" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="cfMac">MAC Address <span class="hint-inline">— exactly as shown (e.g. 00:1E:BF:00:9E:CB)</span></label>
+                    <input type="text" id="cfMac" placeholder="00:1E:BF:00:9E:CB" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="cfVer">Version <span class="hint-inline">— as shown (e.g. M18.29B)</span></label>
+                    <input type="text" id="cfVer" placeholder="M18.29B" autocomplete="off">
+                </div>
             </div>
-            <button id="cfGenBtn" class="preset-btn" style="margin-top:6px;">Generate classic unlock code</button>
-            <div id="cfResult" style="display:none; margin-top:8px; padding:8px; background:#fff; border:1px solid #d97706; border-radius:6px; font-size:13px;"></div>
+        </section>
 
-            <p style="margin:8px 0 0 0; font-size:12px; color:#78716c;">CRC-16 poly 0x8005, init 0, MSB-first, final XOR 0xF0F0. code = 1000·CRC(serial+70,000,000) + CRC(MAC octets after 3rd colon, hex) + CRC(version digits, decimal). The MAC must match what the machine's Network screen shows — a different MAC changes the code. Verified via static disassembly; the machine is the final judge. A <code>.PAR</code> restore does not rewrite the lease.</p>
+        <section class="section classic-only" id="classicPaths" style="display:none; border:2px solid #d97706; background:#fffbeb;">
+            <h2 class="section-title" style="color:#92400e;">Classic unlock — two ways in</h2>
+            <p style="margin:0 0 6px 0; font-size:13px;">Verified 2026-08-18 against <code>M1829B.BIN</code> (ColdFire, base 0x10020000; radare2 + Ghidra Coldfire). The classic lock is an 8-byte <strong>lease record in battery-backed RAM</strong> (expiration / due / remaining); "FULLY PAID" = that record all zeros. A <code>.PAR</code> restore does <strong>not</strong> rewrite the lease.</p>
+            <p style="margin:0 0 6px 0; font-size:13px;"><strong>Path A (no code):</strong> On the Diagnostic <strong>BILLING</strong> page, type <code>0</code> into the <strong>"ENTER BILL TIME AS A LONG"</strong> field and confirm (any softkey except the S/cancel key). This drives <code>clear_lease</code> and persists.</p>
+            <p style="margin:0; font-size:13px;"><strong>Path B (permanent code):</strong> The lease-registration entry runs a value-match (<code>reset_lease</code> @0x10232bac, gate cmp @0x10cec6) against a CRC-16 computed from serial + MAC + version. Generate that code below.</p>
+        </section>
+
+        <div class="generate-bar classic-only" id="classicGenerateBar" style="display:none;">
+            <button id="cfGenBtn" class="generate-btn">Generate classic unlock code</button>
+        </div>
+
+        <section class="section output-section classic-only" id="classicOutputSection" style="display:none;">
+            <h2 class="section-title">Classic unlock code</h2>
+            <div class="output-meta">
+                <span>Serial <strong id="cfOutputSerial"></strong></span>
+                <span id="cfOutputMac"></span>
+                <span id="cfOutputVer"></span>
+            </div>
+            <div id="cfResult" style="padding:12px; background:#fff; border:1px solid #d97706; border-radius:6px; font-size:13px;"></div>
+            <div class="howto">
+                <h3>How to enter</h3>
+                <ol>
+                    <li>Open the Diagnostic <strong>BILLING</strong> / lease-registration page</li>
+                    <li>Type the code at the value-match entry, confirm</li>
+                    <li>Or Path A: type <code>0</code> into <strong>ENTER BILL TIME AS A LONG</strong></li>
+                </ol>
+            </div>
+            <p style="margin:8px 0 0 0; font-size:12px; color:#78716c;">CRC-16 poly 0x8005, init 0, MSB-first, final XOR 0xF0F0. code = 1000·CRC(serial+70,000,000) + CRC(MAC octets after 3rd colon, hex) + CRC(version digits, decimal). The MAC must match what the machine's Network screen shows — a different MAC changes the code. Verified via static disassembly; the machine is the final judge.</p>
         </section>
 
         <!-- Notes: removing a feature -->
-        <section class="section">
+        <section class="section ngc-only">
             <details class="notes">
                 <summary>
                     <span class="section-title" style="margin:0;">Notes — how to remove a feature</span>
@@ -281,12 +343,12 @@
         </section>
 
         <!-- Generate -->
-        <div class="generate-bar">
+        <div class="generate-bar ngc-only">
             <button id="generateBtn" class="generate-btn">Generate</button>
         </div>
 
         <!-- Individual codes output -->
-        <section class="section output-section" id="individualOutputSection" style="display:none;">
+        <section class="section output-section ngc-only" id="individualOutputSection" style="display:none;">
             <div class="section-head">
                 <h2 class="section-title">Unlock codes</h2>
                 <span class="feature-count" id="outputCodeCount"></span>
@@ -314,7 +376,7 @@
         </section>
 
         <!-- USB key output -->
-        <section class="section output-section" id="fileOutputSection" style="display:none;">
+        <section class="section output-section ngc-only" id="fileOutputSection" style="display:none;">
             <h2 class="section-title">HaasKey.txt</h2>
             <div class="output-meta">
                 <span>Serial <strong id="outputSerial"></strong></span>
