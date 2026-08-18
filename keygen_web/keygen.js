@@ -206,6 +206,8 @@ function updateChallengeVisibility(){
     if(macField) macField.style.display = show;
     if(verField) verField.style.display = show;
     if(hint) hint.style.display = show;
+    const cf = document.getElementById('coldfireHint');
+    if(cf) cf.style.display = show;
 }
 function handleKeyTypeChange() {
     const keyType = document.querySelector('input[name="keyType"]:checked').value;

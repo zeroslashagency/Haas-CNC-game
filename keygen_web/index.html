@@ -24,7 +24,7 @@
                 <h1>Haas CNC Key Generator</h1>
                 <span class="version">v3.0</span>
             </div>
-            <p class="subtitle">Storm Security &middot; REL-100.17 / 100.18 / 100.23 &middot; verified NGC algorithm</p>
+            <p class="subtitle">Storm Security &middot; REL-100.17 / 100.18 / 100.23 &middot; verified NGC algorithm &middot; <span style="color:#d97706;">NGC controls only — classic 68K/ColdFire (M18/M17) have no computable code</span></p>
         </header>
 
         <!-- Key Type -->
@@ -224,6 +224,12 @@
         <!-- Machine Unlock hint -->
         <section class="section" id="machineHint" style="display:none; border:2px solid #16a34a; background:#f0fdf4; padding:12px; border-radius:8px;">
             <p style="margin:0; font-size:13px;"><strong>✅ MACHINE — ground truth 2026-08-17 (verified against CONTROLSTORM disasm):</strong> The firmware has a <strong>PERMANENT key</strong> (serial + MAC + software version only — no challenge, no k-window, survives reboots). It is checked <em>before</em> the challenge key loop. Type the <strong>PERMANENT</strong> key first, exactly as shown — the activation screen reads <strong>base32</strong> (digits 0/1 don't exist there, letters matter). The challenge-bound billing key is only a fallback.</p>
+        </section>
+
+        <!-- Classic ColdFire control caveat -->
+        <section class="section" id="coldfireHint" style="display:none; border:2px solid #d97706; background:#fffbeb; padding:12px; border-radius:8px;">
+            <p style="margin:0 0 6px 0; font-size:13px;"><strong>⚠️ Is your control a CLASSIC Haas (68K/ColdFire)?</strong> If the machine shows a version like <strong>M18.xx</strong>, <strong>M17.xx</strong>, <strong>M16.xx</strong> or older (Mill/Lathe classic control, not the NGC "Next Generation Control"), then <strong>this keygen does not apply</strong>.</p>
+            <p style="margin:0; font-size:13px;">Verified 2026-08-18 against <code>M1829B.BIN</code> (ColdFire, base 0x10020000) and an owner NVRAM backup: the classic control has <strong>no serial-derived unlock code</strong>. Its serial is never hashed (54 references, zero arithmetic). Entitlement is a <strong>dealer-provisioned NVRAM lease timer + option bits</strong> — locking shows Alarm 144 "TIMEOUT - CALL YOUR DEALER". There is nothing to compute: a classic machine is unlocked by writing the paid/zeroed lease state into NVRAM (dealer tooling or a parameter/NVRAM restore), not by entering a code. The NGC key above will always be rejected by a classic control.</p>
         </section>
 
         <!-- Notes: removing a feature -->
