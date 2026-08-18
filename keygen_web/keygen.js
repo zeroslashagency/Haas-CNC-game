@@ -298,11 +298,9 @@ function updateChallengeVisibility(){
     const field = document.getElementById('challengeField');
     const macField = document.getElementById('macField');
     const verField = document.getElementById('swversionField');
-    const hint = document.getElementById('machineHint');
     if(field) field.style.display = show;
     if(macField) macField.style.display = show;
     if(verField) verField.style.display = show;
-    if(hint) hint.style.display = show;
 }
 function handleKeyTypeChange() {
     const keyType = document.querySelector('input[name="keyType"]:checked').value;
