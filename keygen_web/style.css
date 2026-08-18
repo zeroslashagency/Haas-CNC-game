@@ -99,8 +99,10 @@ body:not(.locked) #lockOverlay { display: none; }
 /* ---------- control-type mode toggle ---------- */
 body.mode-ngc .classic-only { display: none !important; }
 body.mode-classic .ngc-only { display: none !important; }
-body.mode-classic .classic-only { display: block; animation: revealField .28s var(--ease); }
-body.mode-classic .classic-only.generate-bar { display: flex; }
+/* reveal classic panels (override their inline display:none), but NOT the
+   output section — it stays hidden until a code is generated. */
+body.mode-classic .classic-only:not(.output-section) { display: block !important; animation: revealField .28s var(--ease); }
+body.mode-classic .classic-only.generate-bar { display: flex !important; }
 
 .mode-id-table { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .mode-id-row { display: grid; grid-template-columns: 2fr 1.4fr; }
