@@ -226,11 +226,22 @@
             <p style="margin:0; font-size:13px;"><strong>✅ MACHINE — ground truth 2026-08-17 (verified against CONTROLSTORM disasm):</strong> The firmware has a <strong>PERMANENT key</strong> (serial + MAC + software version only — no challenge, no k-window, survives reboots). It is checked <em>before</em> the challenge key loop. Type the <strong>PERMANENT</strong> key first, exactly as shown — the activation screen reads <strong>base32</strong> (digits 0/1 don't exist there, letters matter). The challenge-bound billing key is only a fallback.</p>
         </section>
 
-        <!-- Classic ColdFire control caveat -->
+        <!-- Classic ColdFire control caveat + generator -->
         <section class="section" id="coldfireHint" style="display:none; border:2px solid #d97706; background:#fffbeb; padding:12px; border-radius:8px;">
-            <p style="margin:0 0 6px 0; font-size:13px;"><strong>⚠️ Is your control a CLASSIC Haas (68K/ColdFire)?</strong> If the machine shows a version like <strong>M18.xx</strong>, <strong>M17.xx</strong>, <strong>M16.xx</strong> or older (Mill/Lathe classic control, not the NGC "Next Generation Control"), then <strong>this keygen does not apply</strong> — there is no code to type.</p>
-            <p style="margin:0 0 6px 0; font-size:13px;">Verified 2026-08-18 against <code>M1829B.BIN</code> (ColdFire, base 0x10020000, disassembled with radare2): the classic control has <strong>no serial-derived unlock code</strong>. Its serial is never hashed (54 references, zero arithmetic — nothing to compute). The screen that shows Serial / MAC / a "PAYMENT DUE DATE" is the <strong>Diagnostic BILLING page</strong>; the field there takes a <strong>date/timestamp LONG, not an activation key</strong>, and it is checked against the clock — no strcmp, hash, or CRC.</p>
-            <p style="margin:0; font-size:13px;">The lock is an 8-byte <strong>lease record in battery-backed RAM</strong> (expiration / due / remaining). "FULLY PAID" simply means that record is all zeros. The routine that zeroes it (<code>reset_lease</code> @0x10232bac) is gated only by <strong>operator security level 1</strong> — no dealer secret or crypto on the clear path. Note: a <code>.PAR</code>/settings restore does <strong>not</strong> rewrite the lease (it lives outside the parameter channel — the "FULLY PAID" line in a backup is only a printout comment). NGC keys above are always rejected by a classic control.</p>
+            <p style="margin:0 0 6px 0; font-size:13px;"><strong>⚠️ Is your control a CLASSIC Haas (68K/ColdFire)?</strong> If the machine shows a version like <strong>M18.xx</strong>, <strong>M17.xx</strong>, <strong>M16.xx</strong> (Mill/Lathe classic control, not the NGC "Next Generation Control"), the NGC key above does <strong>not</strong> apply — use the classic generator below instead.</p>
+            <p style="margin:0 0 6px 0; font-size:13px;">Verified 2026-08-18 against <code>M1829B.BIN</code> (ColdFire, base 0x10020000; radare2 + Ghidra Coldfire). The classic lock is an 8-byte <strong>lease record in battery-backed RAM</strong> (expiration / due / remaining); "FULLY PAID" = that record is all zeros. There are <strong>two</strong> ways in:</p>
+            <p style="margin:0 0 6px 0; font-size:13px;"><strong>Path A (no code):</strong> On the Diagnostic <strong>BILLING</strong> page, type <code>0</code> into the <strong>"ENTER BILL TIME AS A LONG"</strong> field and confirm (any softkey except the S/cancel key). This drives <code>clear_lease</code> and persists.</p>
+            <p style="margin:0 0 8px 0; font-size:13px;"><strong>Path B (permanent code):</strong> The lease-registration entry runs a value-match (<code>reset_lease</code> @0x10232bac, gate cmp @0x10cec6) against a CRC-16 computed from serial + MAC + version. Generate that code here:</p>
+
+            <div class="field-row" style="gap:8px;">
+                <div class="field"><label for="cfSerial" style="font-size:12px;">Serial No. (from screen)</label><input type="text" id="cfSerial" inputmode="numeric" placeholder="1119132" value="1119132" autocomplete="off"></div>
+                <div class="field"><label for="cfMac" style="font-size:12px;">MAC Address (from screen)</label><input type="text" id="cfMac" placeholder="00:1E:BF:00:9E:CB" value="00:1E:BF:00:9E:CB" autocomplete="off"></div>
+                <div class="field"><label for="cfVer" style="font-size:12px;">Version (as shown)</label><input type="text" id="cfVer" placeholder="M18.29B" value="M18.29B" autocomplete="off"></div>
+            </div>
+            <button id="cfGenBtn" class="preset-btn" style="margin-top:6px;">Generate classic unlock code</button>
+            <div id="cfResult" style="display:none; margin-top:8px; padding:8px; background:#fff; border:1px solid #d97706; border-radius:6px; font-size:13px;"></div>
+
+            <p style="margin:8px 0 0 0; font-size:12px; color:#78716c;">CRC-16 poly 0x8005, init 0, MSB-first, final XOR 0xF0F0. code = 1000·CRC(serial+70,000,000) + CRC(MAC octets after 3rd colon, hex) + CRC(version digits, decimal). The MAC must match what the machine's Network screen shows — a different MAC changes the code. Verified via static disassembly; the machine is the final judge. A <code>.PAR</code> restore does not rewrite the lease.</p>
         </section>
 
         <!-- Notes: removing a feature -->

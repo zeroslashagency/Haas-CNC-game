@@ -164,8 +164,65 @@ function initializeEventListeners() {
     if(stickSel) stickSel.addEventListener('change', applyStickSelection);
     const sweepBtn=document.getElementById('sweepBtn');
     if(sweepBtn) sweepBtn.addEventListener('click', downloadMachineSweep);
+    const cfBtn=document.getElementById('cfGenBtn');
+    if(cfBtn) cfBtn.addEventListener('click', generateClassicColdfireCode);
 
     initInputAnimations();
+}
+
+// ---------------------------------------------------------------------------
+// CLASSIC ColdFire (M18/M17) permanent unlock code — reversed from M1829B.BIN
+// reset_lease @0x10232bac gated by value-match cmp @0x10cec6 against FUN_1012c984.
+// code = 1000*CRC(serial+addend) + CRC(mac_tail_hex) + CRC(version_digits)
+// CRC-16 poly 0x8005, init 0, MSB-first over 32 bits, final XOR 0xF0F0 (same as NGC crc16Haas).
+// Mirrors tools/d1_classic_keygen.py — verified: serial 1119132 / 00:1E:BF:00:9E:CB / M18.29B -> 1540558.
+// ---------------------------------------------------------------------------
+function classicMacTailHex(macStr){
+    // FUN_1012d710: collect chars after the 3rd ':' , parse as hex
+    let cnt=0, buf='';
+    for(const ch of macStr){
+        if(ch===':') cnt++;
+        else if(cnt>2) buf+=ch;
+    }
+    // if no colons (bare hex string), fall back to the last 6 hex chars
+    if(cnt<3){ const h=macStr.replace(/[^0-9a-fA-F]/g,''); buf = h.slice(-6); }
+    if(!/^[0-9a-fA-F]+$/.test(buf) || buf==='') return null;
+    return parseInt(buf,16)>>>0;
+}
+function classicVersionDigits(verStr){
+    // FUN_1012d80c: keep only digit chars, decimal atoi. "M18.29B" -> 1829
+    const d=(verStr||'').replace(/[^0-9]/g,'');
+    if(d==='') return null;
+    return parseInt(d,10)>>>0;
+}
+// crc16Haas() returns the raw CRC WITHOUT the final XOR (NGC callers apply ^0xF0F0
+// themselves). The classic firmware bakes the ^0xF0F0 into the CRC, so apply it here.
+function classicCrc(v){ return (crc16Haas(v>>>0) ^ 0xF0F0) & 0xFFFF; }
+function classicUnlockCode(serial, macStr, verStr){
+    const mac=classicMacTailHex(macStr);
+    const ver=classicVersionDigits(verStr);
+    if(mac===null || ver===null || !(serial>0)) return null;
+    const addend = serial>999999 ? 70000000 : 700000;
+    const crcC = classicCrc((serial+addend)>>>0);   // *1000 term
+    const crcB = classicCrc(mac);                    // MAC tail
+    const crcA = classicCrc(ver);                    // version digits
+    return {code:(1000*crcC + crcB + crcA)>>>0, crcA, crcB, crcC, mac, ver, addend};
+}
+function generateClassicColdfireCode(){
+    const out=document.getElementById('cfResult');
+    const serial=parseInt((document.getElementById('cfSerial')?.value||'').trim(),10);
+    const mac=(document.getElementById('cfMac')?.value||'').trim();
+    const ver=(document.getElementById('cfVer')?.value||'').trim();
+    if(!out) return;
+    if(!(serial>0)){ out.style.display='block'; out.innerHTML='<strong style="color:#dc2626">Enter a valid serial number.</strong>'; return; }
+    const r=classicUnlockCode(serial, mac, ver);
+    if(!r){ out.style.display='block'; out.innerHTML='<strong style="color:#dc2626">Need serial + MAC (with colons, e.g. 00:1E:BF:00:9E:CB) + version (e.g. M18.29B).</strong>'; return; }
+    out.style.display='block';
+    out.innerHTML =
+        '<div>Permanent unlock code (type on the lease/registration entry):</div>'+
+        '<div style="font-size:22px; font-weight:bold; letter-spacing:2px; margin:4px 0;">'+r.code+'</div>'+
+        '<div style="font-size:11px; color:#78716c;">CRC_C=crc(serial+'+r.addend+')='+r.crcC+' · CRC_B=crc(MAC 0x'+r.mac.toString(16).toUpperCase()+')='+r.crcB+' · CRC_A=crc(ver '+r.ver+')='+r.crcA+'</div>'+
+        '<div style="font-size:11px; color:#78716c; margin-top:4px;">If the machine\'s Network screen shows a different MAC, re-enter it — the code changes. Or use Path A: type 0 into the BILL TIME field.</div>';
 }
 
 // Per-keystroke "pop" on the numeric/key inputs. Pure UI — retriggers the
