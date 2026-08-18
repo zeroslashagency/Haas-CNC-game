@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Haas CNC Key Generator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="locked">
+    <!-- Password lock -->
+    <div id="lockOverlay" class="lock-overlay">
+        <div class="lock-card">
+            <div class="lock-title">Haas CNC Key Generator</div>
+            <p class="lock-desc">Enter password to continue</p>
+            <input type="password" id="lockPassword" placeholder="Password" autocomplete="off" autofocus>
+            <div id="lockError" class="lock-error" style="display:none;">Wrong password</div>
+            <button id="lockBtn" class="generate-btn" style="margin-top:12px;">Unlock</button>
+        </div>
+    </div>
+
+    <div class="page">
+        <header class="header">
+            <div class="header-row">
+                <h1>Haas CNC Key Generator</h1>
+                <span class="version">v3.1</span>
+            </div>
+            <p class="subtitle">Storm Security &middot; two control generations, two real algorithms &middot; pick your control type first</p>
+        </header>
+
+        <!-- Control type (top-level mode switch) -->
+        <section class="section" id="controlTypeSection">
+            <h2 class="section-title">Control type — pick first</h2>
+            <div class="segmented" id="controlTypeSwitch">
+                <label class="segment">
+                    <input type="radio" name="controlType" value="ngc" checked>
+                    <span class="segment-label">NGC — Next Gen Control</span>
+                    <span class="segment-desc">touchscreen; screen says "MACHINE ACTIVATION / ENTER THE KEY" — CRC challenge/response</span>
+                </label>
+                <label class="segment">
+                    <input type="radio" name="controlType" value="classic">
+                    <span class="segment-label">Classic — 68K/ColdFire</span>
+                    <span class="segment-desc">M16 / M17 / M18 keypad control — lease/billing unlock</span>
+                </label>
+            </div>
+            <div class="mode-id-table">
+                <div class="mode-id-row">
+                    <div class="mode-id-cell mode-id-head">Your screen shows…</div>
+                    <div class="mode-id-cell mode-id-head">Then it is</div>
+                </div>
+                <div class="mode-id-row">
+                    <div class="mode-id-cell"><strong>MACHINE ACTIVATION</strong> · SERIAL NUMBER · MAC ADDRESS · <strong>ACTIVATION CODE</strong> (6 rotating digits) · ENTER THE KEY · INVALID KEY. TRY AGAIN</div>
+                    <div class="mode-id-cell"><strong>NGC</strong> (even if the version reads "M18.29B" — that label appears on NGC-M too; verified against live screen 2026-08-18)</div>
+                </div>
+                <div class="mode-id-row">
+                    <div class="mode-id-cell">Older monochrome/keypad control, <strong>BILLING</strong> / lease-timer diagnostic page, "ENTER BILL TIME AS A LONG", no ACTIVATION CODE screen</div>
+                    <div class="mode-id-cell"><strong>Classic</strong></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Key Type -->
+        <section class="section ngc-only">
+            <h2 class="section-title">Key type</h2>
+            <div class="segmented">
+                <label class="segment">
+                    <input type="radio" name="keyType" value="individual" checked>
+                    <span class="segment-label">Individual codes</span>
+                    <span class="segment-desc">5-digit keypad codes</span>
+                </label>
+                <label class="segment">
+                    <input type="radio" name="keyType" value="file">
+                    <span class="segment-label">USB drive key</span>
+                    <span class="segment-desc">service-level HaasKey.txt (no features)</span>
+                </label>
+            </div>
+        </section>
+
+        <!-- Machine -->
+        <section class="section ngc-only">
+            <h2 class="section-title">Machine</h2>
+            <div class="field-row">
+                <div class="field" id="serialField">
+                    <label for="serial">Serial number</label>
+                    <input type="text" id="serial" inputmode="numeric" placeholder="1190223" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="firmware">Firmware</label>
+                    <select id="firmware">
+                        <option value="17">REL-100.17</option>
+                        <option value="18">REL-100.18</option>
+                        <option value="23" selected>REL-100.23</option>
+                    </select>
+                </div>
+            </div>
+            <div class="field" id="macField" style="display:none; margin-top:12px;">
+                <label for="mac">MAC Address <span class="hint-inline" style="color:#dc2626;font-weight:bold">— REQUIRED: SETUP → Network/Machine Info (e.g. 00:1E:BF:00:9E:CB). The firmware CRCs the last 3 bytes — wrong MAC = wrong key.</span></label>
+                <input type="text" id="mac" placeholder="e.g. 00:1A:2B:3C:4D:5E or 001A2B3C4D5E" autocomplete="off">
+                <p class="hint" style="margin-top:6px;">Verified against CONTROLSTORM 0x1F38C call site: the firmware CRCs <code>getLastPartMacAddress()</code> (last 3 MAC bytes). Copy it exactly off the screen.</p>
+            </div>
+            <div class="field" id="swversionField" style="display:none; margin-top:12px;">
+                <label for="swversion">Software Version <span class="hint-inline" style="color:#dc2626;font-weight:bold">— REQUIRED exactly as shown on the control (e.g. 100.23.000.1201 or M18.29B). The firmware CRCs it — wrong version = wrong key.</span></label>
+                <input type="text" id="swversion" placeholder="e.g. 100.23.000.1201 or VER M18.29B" autocomplete="off">
+                <p class="hint" style="margin-top:6px;">Mirrors Java <code>softwareVersionForMagicCode()</code>: drop dots, take chars from index 3, <code>Integer.valueOf(...)</code>. "100.23.000.1201" → 230001201. NGC-M like <strong>"M18.29B"</strong> is non-numeric → the firmware catches the exception and uses <strong>0</strong> — this tool does the same, so just type it exactly as the screen shows.</p>
+            </div>
+            <div class="field" id="challengeField" style="display:none; margin-top:12px;">
+                <label for="challenge">Under Activation Key <span class="hint-inline">— from machine: SETUP → Activation (shown under serial). OPTIONAL: only needed for the billing fallback key — the PERMANENT key does not use it.</span></label>
+                <input type="text" id="challenge" placeholder="e.g. 48291 (decimal as shown on screen)" autocomplete="off">
+                <p class="hint" style="margin-top:6px;">Shown only for <strong>Machine Control</strong>. The number on screen = CRC1+CRC2+CRC3 — the generator recovers CRC1 from it. Leave empty if you only want the PERMANENT key.</p>
+            </div>
+        </section>
+
+        <!-- Expiry (USB only) -->
+        <section class="section ngc-only" id="expirySection" style="display:none;">
+            <h2 class="section-title">Expiration</h2>
+            <div class="chip-row">
+                <label class="chip"><input type="radio" name="expiry" value="unlimited" checked><span>Unlimited</span></label>
+                <label class="chip"><input type="radio" name="expiry" value="30"><span>30 days</span></label>
+                <label class="chip"><input type="radio" name="expiry" value="60"><span>60 days</span></label>
+                <label class="chip"><input type="radio" name="expiry" value="90"><span>90 days</span></label>
+                <label class="chip"><input type="radio" name="expiry" value="365"><span>1 year</span></label>
+                <label class="chip"><input type="radio" name="expiry" value="custom"><span>Custom</span></label>
+            </div>
+            <div id="customDateSection" class="field" style="display:none; margin-top:12px;">
+                <label for="customDate">Custom date</label>
+                <input type="date" id="customDate">
+            </div>
+        </section>
+
+        <!-- Features -->
+        <section class="section ngc-only" id="featuresSection">
+            <div class="section-head">
+                <h2 class="section-title">Features</h2>
+                <span id="featureCount" class="feature-count">0 selected</span>
+            </div>
+
+            <div id="individualCodeSelection">
+                <p class="hint">Features marked <span class="code-badge">CODE</span> get a 5-digit keypad code, entered on the machine's Features tab. Unmarked features are not supported (USB keys cannot enable options — proven from libStormSecurity.so).</p>
+            </div>
+
+            <div id="filePresetButtons" class="chip-row" style="display:none;">
+                <button class="preset-btn" data-preset="basic">Basic</button>
+                <button class="preset-btn" data-preset="standard">Standard</button>
+                <button class="preset-btn" data-preset="advanced">Advanced</button>
+                <button class="preset-btn" data-preset="professional">Professional</button>
+                <button class="preset-btn" data-preset="godmode">All</button>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-group">
+                    <div class="group-head">
+                        <h3>Core</h3>
+                        <button class="group-toggle" data-group-toggle>All</button>
+                    </div>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MACHINE" data-requires="challenge"><span class="box"></span><span class="name">Machine Control</span><span class="code-badge">CODE • needs activation key</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MACROS" checked><span class="box"></span><span class="name">Macro Programming</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="ROTATION_AND_SCALING" checked><span class="box"></span><span class="name">Rotation &amp; Scaling</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="RIGID_TAPPING" checked><span class="box"></span><span class="name">Rigid Tapping</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="TCPC_AND_DWO" checked><span class="box"></span><span class="name">TCPC &amp; DWO</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="M19_SPINDLE_ORIENT" checked><span class="box"></span><span class="name">M19 Spindle Orient</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="UNLOCK_PARAMETERS"><span class="box"></span><span class="name">Unlock Parameters</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="UNLOCK_FACTORY_SETTINGS"><span class="box"></span><span class="name">Unlock Factory Settings</span><span class="code-badge">CODE</span></label>
+                </div>
+
+                <div class="feature-group">
+                    <div class="group-head">
+                        <h3>Machining</h3>
+                        <button class="group-toggle" data-group-toggle>All</button>
+                    </div>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="HIGH_SPEED_MACHINING" checked><span class="box"></span><span class="name">High-Speed Machining</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="VPS_EDITING" checked><span class="box"></span><span class="name">VPS Editing</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MEDIA_DISPLAY" checked><span class="box"></span><span class="name">Media Display</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature" data-feature="LOOK_AHEAD" checked><span class="box"></span><span class="name">Look-Ahead</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature" data-feature="ADVANCED_INTERPOLATION" checked><span class="box"></span><span class="name">Advanced Interpolation</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature" data-feature="MILL_TURN" checked><span class="box"></span><span class="name">Mill-Turn</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="CUSTOM_PLANE"><span class="box"></span><span class="name">Custom Plane</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="EXTENDED_FEATURES"><span class="box"></span><span class="name">Extended Features</span><span class="code-badge">CODE</span></label>
+                </div>
+
+                <div class="feature-group">
+                    <div class="group-head">
+                        <h3>Axis</h3>
+                        <button class="group-toggle" data-group-toggle>All</button>
+                    </div>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="FOURTH_AXIS" checked><span class="box"></span><span class="name">Fourth Axis (A/B)</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="FIFTH_AXIS" checked><span class="box"></span><span class="name">Fifth Axis</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="CUSTOM_ROTARIES" checked><span class="box"></span><span class="name">Custom Rotaries</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="C_AXIS_FEATURE"><span class="box"></span><span class="name">C Axis</span><span class="code-badge">CODE</span></label>
+                </div>
+
+                <div class="feature-group">
+                    <div class="group-head">
+                        <h3>Hardware</h3>
+                        <button class="group-toggle" data-group-toggle>All</button>
+                    </div>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MAX_MEMORY_1GB" checked><span class="box"></span><span class="name">Extended Memory (32/48/64 GB)</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="WIRELESS_NETWORKING" checked><span class="box"></span><span class="name">Wireless Networking</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="COMPENSATION_TABLES" checked><span class="box"></span><span class="name">Compensation Tables</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="THROUGH_SPINDLE_COOLANT" checked><span class="box"></span><span class="name">Through-Spindle Coolant</span><span class="code-badge">CODE</span></label>
+                </div>
+
+                <div class="feature-group">
+                    <div class="group-head">
+                        <h3>Spindle &amp; Probing</h3>
+                        <button class="group-toggle" data-group-toggle>All</button>
+                    </div>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MAX_SPINDLE_SPEED_10000" checked><span class="box"></span><span class="name">Max Spindle 10,000 RPM</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MAX_SPINDLE_SPEED_15000" checked><span class="box"></span><span class="name">Max Spindle 15,000 RPM</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MAX_SPINDLE_SPEED_ALL"><span class="box"></span><span class="name">Max Spindle (All Tiers)</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MAX_SUB_SPINDLE_SPEED"><span class="box"></span><span class="name">Max Sub-Spindle (All Tiers)</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="MAX_LT_SPINDLE_SPEED"><span class="box"></span><span class="name">Max Live-Tooling Spindle (All Tiers)</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature individual-code" data-feature="ROBOT"><span class="box"></span><span class="name">Robot Interface</span><span class="code-badge">CODE</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature" data-feature="PROBING" checked><span class="box"></span><span class="name">Probing Cycles</span></label>
+                    <label class="feature-checkbox"><input type="checkbox" class="feature" data-feature="WIRELESS_PROBING" checked><span class="box"></span><span class="name">Wireless Probing</span></label>
+                </div>
+            </div>
+        </section>
+
+        <!-- Advanced (USB only) -->
+        <section class="section ngc-only" id="advancedSection" style="display:none;">
+            <h2 class="section-title">USB service key</h2>
+            <p class="hint" style="margin:0 0 10px;">This key elevates the <strong>service level</strong> on the control (Service / Factory / Manager / DevTest menus, read once at boot). It does <strong>not</strong> enable machine options — options are 5-digit codes in <em>Individual codes</em> mode. Only these 4 things are real: level, employee ID, end date, and the stick it binds to.</p>
+            <div class="field-row">
+                <div class="field">
+                    <label for="employeeId">Employee ID</label>
+                    <input type="text" id="employeeId" value="00000" maxlength="16">
+                </div>
+                <div class="field">
+                    <label for="companyCode">Company code <span class="hint-inline">— fixed 1213 (Haas internal)</span></label>
+                    <input type="text" id="companyCode" value="1213" maxlength="16" readonly>
+                </div>
+                <div class="field">
+                    <label for="securityLevel">Security level</label>
+                    <select id="securityLevel">
+                        <option value="SERVICE" selected>Service</option>
+                        <option value="FACTORY">Factory</option>
+                        <option value="MANAGER">Manager</option>
+                        <option value="DEVTEST">DevTest</option>
+                    </select>
+                </div>
+            </div>
+            <div class="field-row">
+                <div class="field" style="flex:1">
+                    <label for="stickSerial">USB stick serial <span class="hint-inline" style="color:#dc2626;font-weight:bold">— REQUIRED: the stick's hardware serial (any length — the machine uses the first 16 chars, bytecode-verified)</span></label>
+                    <input type="text" id="stickSerial" placeholder="e.g. 0950071171627108316 or 6E009184F6A68533" autocomplete="off">
+                    <p class="hint" style="margin-top:6px;">Windows: <code>Get-PhysicalDisk | Select FriendlyName, SerialNumber</code> (often 19–20 digits — paste it ALL). Linux/Haas: <code>udevadm info --query=all -n /dev/sdX | grep ID_SERIAL_SHORT</code>.</p>
+                    <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <button type="button" id="detectSticksBtn" class="btn-secondary">Detect USB sticks (auto)</button>
+                        <select id="stickSelect" style="display:none; min-width:280px;"></select>
+                    </div>
+                    <span class="hint-inline" id="stickDetectHint" style="display:block; margin-top:6px;">One-time: run <code>python3 usb_agent.py</code> (from keygen_web folder) with the stick plugged in — then Detect fills the serial automatically. Manual fallback: <code>udevadm info --query=all -n /dev/sdX | grep ID_SERIAL_SHORT</code></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Machine Unlock hint -->
+        <section class="section ngc-only" id="machineHint" style="display:none; border:2px solid #16a34a; background:#f0fdf4; padding:12px; border-radius:8px;">
+            <p style="margin:0; font-size:13px;"><strong>✅ MACHINE — ground truth 2026-08-17 (verified against CONTROLSTORM disasm):</strong> The firmware has a <strong>PERMANENT key</strong> (serial + MAC + software version only — no challenge, no k-window, survives reboots). It is checked <em>before</em> the challenge key loop. Type the <strong>PERMANENT</strong> key first, exactly as shown — the activation screen reads <strong>base32</strong> (digits 0/1 don't exist there, letters matter). The challenge-bound billing key is only a fallback.</p>
+        </section>
+
+        <!-- ================= CLASSIC MODE ================= -->
+        <section class="section classic-only" id="classicMachine" style="display:none;">
+            <h2 class="section-title">Classic machine</h2>
+            <div class="field-row">
+                <div class="field">
+                    <label for="cfSerial">Serial No. <span class="hint-inline">— from the machine screen</span></label>
+                    <input type="text" id="cfSerial" inputmode="numeric" placeholder="1119132" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="cfMac">MAC Address <span class="hint-inline">— exactly as shown (e.g. 00:1E:BF:00:9E:CB)</span></label>
+                    <input type="text" id="cfMac" placeholder="00:1E:BF:00:9E:CB" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="cfVer">Version <span class="hint-inline">— as shown (e.g. M18.29B)</span></label>
+                    <input type="text" id="cfVer" placeholder="M18.29B" autocomplete="off">
+                </div>
+            </div>
+        </section>
+
+        <section class="section classic-only" id="classicPaths" style="display:none; border:2px solid #d97706; background:#fffbeb;">
+            <h2 class="section-title" style="color:#92400e;">Classic unlock — two ways in</h2>
+            <p style="margin:0 0 6px 0; font-size:13px;">Verified 2026-08-18 against <code>M1829B.BIN</code> (ColdFire, base 0x10020000; radare2 + Ghidra Coldfire). The classic lock is an 8-byte <strong>lease record in battery-backed RAM</strong> (expiration / due / remaining); "FULLY PAID" = that record all zeros. A <code>.PAR</code> restore does <strong>not</strong> rewrite the lease.</p>
+            <p style="margin:0 0 6px 0; font-size:13px;"><strong>Path A (no code):</strong> On the Diagnostic <strong>BILLING</strong> page, type <code>0</code> into the <strong>"ENTER BILL TIME AS A LONG"</strong> field and confirm (any softkey except the S/cancel key). This drives <code>clear_lease</code> and persists.</p>
+            <p style="margin:0; font-size:13px;"><strong>Path B (permanent code):</strong> The lease-registration entry runs a value-match (<code>reset_lease</code> @0x10232bac, gate cmp @0x10cec6) against a CRC-16 computed from serial + MAC + version. Generate that code below.</p>
+        </section>
+
+        <div class="generate-bar classic-only" id="classicGenerateBar" style="display:none;">
+            <button id="cfGenBtn" class="generate-btn">Generate classic unlock code</button>
+        </div>
+
+        <section class="section output-section classic-only" id="classicOutputSection" style="display:none;">
+            <h2 class="section-title">Classic unlock code</h2>
+            <div class="output-meta">
+                <span>Serial <strong id="cfOutputSerial"></strong></span>
+                <span id="cfOutputMac"></span>
+                <span id="cfOutputVer"></span>
+            </div>
+            <div id="cfResult" style="padding:12px; background:#fff; border:1px solid #d97706; border-radius:6px; font-size:13px;"></div>
+            <div class="howto">
+                <h3>How to enter</h3>
+                <ol>
+                    <li>Open the Diagnostic <strong>BILLING</strong> / lease-registration page</li>
+                    <li>Type the code at the value-match entry, confirm</li>
+                    <li>Or Path A: type <code>0</code> into <strong>ENTER BILL TIME AS A LONG</strong></li>
+                </ol>
+            </div>
+            <p style="margin:8px 0 0 0; font-size:12px; color:#78716c;">CRC-16 poly 0x8005, init 0, MSB-first, final XOR 0xF0F0. code = 1000·CRC(serial+70,000,000) + CRC(MAC octets after 3rd colon, hex) + CRC(version digits, decimal). The MAC must match what the machine's Network screen shows — a different MAC changes the code. Verified via static disassembly; the machine is the final judge.</p>
+        </section>
+
+        <!-- Notes: removing a feature -->
+        <section class="section ngc-only">
+            <details class="notes">
+                <summary>
+                    <span class="section-title" style="margin:0;">Notes — how to remove a feature</span>
+                    <span class="notes-chevron">+</span>
+                </summary>
+                <div class="notes-body">
+                    <p>Entered codes are stored in the machine's magic-code file <code>&lt;serial&gt;_mc.xml</code> and in the BBU. On every boot the control re-seeds the codes from that file to the low level and re-validates them. If a feature's entry is gone, the control automatically flips it back to <em>Disabled</em> — so removing a feature = removing its entry, then rebooting.</p>
+
+                    <h3>Remove one feature (example: MACROS on machine 1190223)</h3>
+                    <ol>
+                        <li>Get file access to the control (USB service mode / SSH).</li>
+                        <li>Open the configuration folder and find <code>1190223_mc.xml</code>.</li>
+                        <li>Find the feature's block:
+                            <pre class="code-block">&lt;FEATUREID&gt;
+    &lt;NAME&gt;MACROS&lt;/NAME&gt;
+    &lt;CODE&gt;63571&lt;/CODE&gt;
+&lt;/FEATUREID&gt;</pre>
+                        </li>
+                        <li>Delete the whole <code>&lt;FEATUREID&gt;</code> block (or set its code to <code>&lt;CODE&gt;0&lt;/CODE&gt;</code>). Tier features carry a <code>VALUE</code> attribute, e.g. <code>&lt;CODE VALUE="15000"&gt;16884&lt;/CODE&gt;</code> — delete those the same way.</li>
+                        <li>Save the file and reboot the control.</li>
+                        <li>SETUP &rarr; FEATURES now shows the feature as not purchased again.</li>
+                    </ol>
+
+                    <h3>Good to know</h3>
+                    <ul>
+                        <li>Typing <code>0</code> on the keypad does <strong>not</strong> remove a purchase — it only toggles enable/disable.</li>
+                        <li>Individual codes are permanent: no expiry exists in the code format. The only built-in time limit is the 200-hour tryout.</li>
+                        <li>Re-entering an existing code pops up a duplicate-code warning (3 attempts, then locked for the session).</li>
+                        <li>Remove <em>all</em> features at once: delete or clear the whole <code>&lt;serial&gt;_mc.xml</code> file, then reboot.</li>
+                    </ul>
+                </div>
+            </details>
+        </section>
+
+        <!-- Generate -->
+        <div class="generate-bar ngc-only">
+            <button id="generateBtn" class="generate-btn">Generate</button>
+        </div>
+
+        <!-- Individual codes output -->
+        <section class="section output-section ngc-only" id="individualOutputSection" style="display:none;">
+            <div class="section-head">
+                <h2 class="section-title">Unlock codes</h2>
+                <span class="feature-count" id="outputCodeCount"></span>
+            </div>
+            <div class="output-meta">
+                <span>Serial <strong id="outputSerial2"></strong></span>
+                <span id="outputFirmware2"></span>
+            </div>
+            <div id="individualCodesContainer" class="codes-list"></div>
+            <div class="output-actions">
+                <button id="copyAllCodesBtn" class="btn-secondary">Copy all</button>
+                <button id="downloadCodesBtn" class="btn-secondary">Download .txt</button>
+                <button id="sweepBtn" class="btn-secondary" style="display:none;">Download MACHINE keys file (permanent + k-sweep)</button>
+            </div>
+            <p id="sweepHint" class="hint" style="display:none; margin-top:8px;">Downloads a text file with the <strong>PERMANENT key</strong> (use this) plus the k=100..149 billing sweep for your challenge. All keys base32 — type exactly, letters included.</p>
+            <div class="howto">
+                <h3>How to enter</h3>
+                <ol>
+                    <li>Press <code>SETUP</code> on the machine</li>
+                    <li>Go to <code>FEATURES</code>, select the feature</li>
+                    <li>Type the 5-digit code, press <code>ENTER</code></li>
+                    <li>Feature shows &ldquo;Purchased&rdquo; &mdash; permanent, no reboot</li>
+                </ol>
+            </div>
+        </section>
+
+        <!-- USB key output -->
+        <section class="section output-section ngc-only" id="fileOutputSection" style="display:none;">
+            <h2 class="section-title">HaasKey.txt</h2>
+            <div class="output-meta">
+                <span>Serial <strong id="outputSerial"></strong></span>
+                <span id="outputFirmware"></span>
+                <span>Expires <strong id="outputExpiry"></strong></span>
+                <span id="outputFeatures"></span>
+            </div>
+            <textarea id="keyOutput" readonly spellcheck="false"></textarea>
+            <div class="output-actions">
+                <button id="copyBtn" class="btn-secondary">Copy</button>
+                <button id="downloadBtn" class="btn-secondary">Download HaasKey.txt</button>
+                <button id="autoDeployBtn" class="btn-primary" style="background:#0a7;">Auto Deploy to Pendrive</button>
+            </div>
+            <p id="autoDeployHint" class="hint" style="margin-top:8px;">One click → pick your pendrive (FAT32) → writes <code>HaasKey.txt</code> perfectly (64 chars/line ×16). No manual copy.</p>
+            <div class="howto">
+                <h3>Deploy</h3>
+                <ol>
+                    <li>Click <strong>Auto Deploy to Pendrive</strong> and pick your stick (grant write)</li>
+                    <li>Or save as <code>HaasKey.txt</code> on a FAT32 USB drive manually</li>
+                    <li>Insert into the control, reboot, verify under SETUP &rarr; FEATURES</li>
+                </ol>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <p>Individual codes use the verified CONTROLSTORM algorithm (CRC-16). For authorized use only.</p>
+        </footer>
+    </div>
+
+    <!-- 8-second generation overlay -->
+    <div id="progressOverlay" class="overlay" style="display:none;">
+        <div class="overlay-card">
+            <div class="overlay-title">Generating</div>
+            <div class="overlay-machine">Machine <strong id="progressSerial"></strong></div>
+            <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+            <div id="progressStep" class="progress-step">Initializing&hellip;</div>
+            <div id="progressLog" class="progress-log"></div>
+        </div>
+    </div>
+
+    <script src="aes.js"></script>
+    <script src="keygen.js"></script>
+</body>
+</html>
